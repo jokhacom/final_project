@@ -1,0 +1,88 @@
+СПРАВОЧНИК — Тренажер знаний ГЦО, полный проект (объединённая версия)
+========================================================================
+
+Это ЕДИНЫЙ актуальный набор — базовый проект + обновление «база знаний»
+уже объединены, дублей нет. Не нужно больше грузить старые наборы
+(ни первые 47 файлов, ни отдельно «Этап 1») — используйте только этот.
+
+Если вы уже начали грузить файлы из старых наборов — не страшно, просто
+продолжайте этим списком и при совпадении имени файла на GitHub нажимайте
+"заменить"/перезаписывайте содержимое.
+
+Как использовать:
+1. На GitHub: "Add file" -> "Create new file".
+2. В поле имени файла вводите РЕАЛЬНЫЙ путь из списка справа (например
+   src/app/layout.tsx) — GitHub сам создаст нужные папки.
+3. Откройте скачанный файл (001.txt и т.д.), скопируйте весь текст,
+   вставьте в тело файла на GitHub.
+4. Commit new file. Повторите для каждого файла.
+
+Папки с круглыми скобками "(admin)" и квадратными "[id]" — это нормальный
+синтаксис Next.js, вводите их как есть, это не опечатка.
+
+Начните с этих файлов — это ядро проекта:
+- 004.txt => package.json
+- 005.txt => prisma/schema.prisma
+- 006.txt => prisma/seed.ts
+
+Дальше — в любом порядке.
+
+001.txt  =>  .env.example
+002.txt  =>  DEPLOYMENT.md
+003.txt  =>  README.md
+004.txt  =>  package.json
+005.txt  =>  prisma/schema.prisma
+006.txt  =>  prisma/seed.ts
+007.txt  =>  src/app/(admin)/admin/analytics/page.tsx
+008.txt  =>  src/app/(admin)/admin/materials/page.tsx
+009.txt  =>  src/app/(admin)/admin/questions/new/page.tsx
+010.txt  =>  src/app/(employee)/me/page.tsx
+011.txt  =>  src/app/(public)/page.tsx
+012.txt  =>  src/app/api/admin/analytics/route.ts
+013.txt  =>  src/app/api/admin/export/route.ts
+014.txt  =>  src/app/api/attempts/finish/route.ts
+015.txt  =>  src/app/api/attempts/start/route.ts
+016.txt  =>  src/app/api/attempts/submit-mc/route.ts
+017.txt  =>  src/app/api/auth/[...nextauth]/route.ts
+018.txt  =>  src/app/api/auth/change-password/route.ts
+019.txt  =>  src/app/api/auth/register/route.ts
+020.txt  =>  src/app/api/certificates/[attemptId]/route.ts
+021.txt  =>  src/app/api/changelog/route.ts
+022.txt  =>  src/app/api/daily-quiz/route.ts
+023.txt  =>  src/app/api/feedback/route.ts
+024.txt  =>  src/app/api/grade/route.ts
+025.txt  =>  src/app/api/leaderboard/route.ts
+026.txt  =>  src/app/api/materials/[id]/analyze/route.ts
+027.txt  =>  src/app/api/materials/[id]/knowledge/route.ts
+028.txt  =>  src/app/api/materials/upload/route.ts
+029.txt  =>  src/app/api/questions/[id]/route.ts
+030.txt  =>  src/app/api/questions/[id]/source/route.ts
+031.txt  =>  src/app/api/questions/generate/route.ts
+032.txt  =>  src/app/api/questions/manual/route.ts
+033.txt  =>  src/app/api/settings/route.ts
+034.txt  =>  src/app/api/users/[id]/cabinet/route.ts
+035.txt  =>  src/app/layout.tsx
+036.txt  =>  src/app/providers.tsx
+037.txt  =>  src/components/FeedbackButton.tsx
+038.txt  =>  src/components/ProtectedTextarea.tsx
+039.txt  =>  src/lib/achievements.ts
+040.txt  =>  src/lib/ai/anthropic.ts
+041.txt  =>  src/lib/ai/index.ts
+042.txt  =>  src/lib/ai/openai.ts
+043.txt  =>  src/lib/ai/provider.ts
+044.txt  =>  src/lib/auth.ts
+045.txt  =>  src/lib/config/features.ts
+046.txt  =>  src/lib/db.ts
+047.txt  =>  src/lib/grading/keywordGrader.ts
+048.txt  =>  src/lib/parsing/extractText.ts
+049.txt  =>  src/lib/scoring.ts
+050.txt  =>  src/middleware.ts
+
+После загрузки всех файлов, у себя на компьютере (там, где база данных):
+
+  npm install
+  npx prisma migrate dev --name init
+  npx prisma db seed
+
+Последняя команда создаст суперадминистратора с логином javokhir и
+покажет временный пароль ОДИН РАЗ в консоли — сразу его запишите.

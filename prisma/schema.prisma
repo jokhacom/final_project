@@ -1,0 +1,218 @@
+// Единая схема данных. Вход по логину и паролю обязателен для всех пользователей
+// с первого дня (см. запрос на полную реализацию авторизации, ролей, экспорта
+// и ИИ-проверки по загруженным материалам).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  ADMIN        // расширенные права, но не полный доступ суперадминистратора
+  SUPERADMIN   // единственная запись — username "javokhir", создание других запрещено на уровне приложения
+}
+
+enum Level {
+  BEGINNER
+  MIDDLE
+  PROFESSIONAL
+  EXAM
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  OPEN
+  FIND_ERROR       // п.4 тип 2: найди ошибку в сообщении
+  FIX_MESSAGE      // п.4 тип 3: исправь сообщение
+  BEST_RESPONSE    // п.4 тип 4: выбери лучший вариант из нескольких
+}
+
+enum MaterialStatus {
+  PENDING     // документ загружен, текст ещё не извлечён/не проанализирован
+  ANALYZING   // ИИ сейчас читает документ и строит базу знаний (Topic/Rule)
+  PROCESSED   // база знаний готова, можно генерировать вопросы
+  FAILED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String   // отображаемое имя
+  username      String   @unique // логин для входа
+  passwordHash  String   // bcrypt-хеш пароля — обязателен для всех, включая суперадминистратора
+  role          Role     @default(EMPLOYEE)
+  createdAt     DateTime @default(now())
+
+  attempts        TestAttempt[]
+  achievements    UserAchievement[]
+  leaderboard     LeaderboardEntry?
+  feedback        Feedback[]
+  weakTopics      WeakTopic[]
+}
+
+model Material {
+  id           String         @id @default(cuid())
+  title        String
+  type         String // pdf | docx | txt | link
+  filePath     String?
+  sourceUrl    String?
+  content      String? // извлеченный текст документа — источник для ИИ
+  status       MaterialStatus @default(PENDING)
+  uploadedBy   String // userId суперадминистратора
+  createdAt    DateTime       @default(now())
+
+  // Версионирование документов (п.13, п.14 запроса): при замене документа
+  // создаётся новая запись Material, ссылающаяся на предыдущую версию.
+  // Старые вопросы остаются связаны со своей версией документа.
+  version      Int            @default(1)
+  supersedesId String?
+  supersedes   Material?      @relation("MaterialVersions", fields: [supersedesId], references: [id])
+  supersededBy Material[]     @relation("MaterialVersions")
+  isActive     Boolean        @default(true) // неактивные версии не используются для новых тестов
+
+  questions Question[]
+  topics    Topic[]
+}
+
+// Раздел 2 и 14 запроса: после чтения документа ИИ группирует материал по темам.
+model Topic {
+  id          String   @id @default(cuid())
+  materialId  String
+  material    Material @relation(fields: [materialId], references: [id])
+  name        String   // например "Приветствие клиента", "Возврат средств"
+  description String?
+  createdAt   DateTime @default(now())
+
+  rules     Rule[]
+  questions Question[]
+}
+
+enum RuleType {
+  REQUIRED       // обязательное требование
+  FORBIDDEN      // запрещённая формулировка/действие
+  RECOMMENDED    // рекомендуемая формулировка
+  EXAMPLE_GOOD   // пример правильного общения
+  EXAMPLE_BAD    // пример неправильного общения
+}
+
+// Раздел 2, 7, 21 запроса: конкретное извлечённое правило — единица истины,
+// на которую ссылается и генерация вопросов, и проверка ответов, и объяснение ошибок.
+model Rule {
+  id          String   @id @default(cuid())
+  topicId     String
+  topic       Topic    @relation(fields: [topicId], references: [id])
+  type        RuleType
+  text        String   // само правило в виде, понятном сотруднику
+  sourceQuote String?  // короткая цитата/место в документе, откуда взято правило
+  createdAt   DateTime @default(now())
+
+  questions Question[]
+}
+
+model Question {
+  id               String       @id @default(cuid())
+  type             QuestionType
+  level            Level
+  text             String
+  options          Json? // для MULTIPLE_CHOICE и BEST_RESPONSE: string[]
+  correctIndex     Int? // для MULTIPLE_CHOICE и BEST_RESPONSE
+  expectedKeywords Json? // для OPEN: string[] — вспомогательные подсказки для ИИ-проверки
+  explanation      String? // объяснение правильного ответа и типичных ошибок (п.4 тип 1)
+
+  sourceMaterialId String?
+  sourceMaterial   Material? @relation(fields: [sourceMaterialId], references: [id])
+
+  // Раздел 21 запроса: у каждого вопроса должна быть прослеживаемая цепочка
+  // Question → Topic → Rule → Source Document. topicId/ruleId необязательны —
+  // старые вопросы (созданные до этой функции или вручную) могут их не иметь.
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id])
+  ruleId  String?
+  rule    Rule?   @relation(fields: [ruleId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  answers Answer[]
+}
+
+model TestAttempt {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  level      Level
+  candies    Int // 0-100
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+
+  answers Answer[]
+}
+
+model Answer {
+  id            String      @id @default(cuid())
+  attemptId     String
+  attempt       TestAttempt @relation(fields: [attemptId], references: [id])
+  questionId    String
+  question      Question    @relation(fields: [questionId], references: [id])
+  rawAnswer     String? // текст открытого ответа или индекс выбранного варианта
+  isCorrect     Boolean
+  spellingErrors Int        @default(0)
+  grammarErrors  Int        @default(0)
+  aiComment     String?
+  createdAt     DateTime    @default(now())
+}
+
+model WeakTopic {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  topic     String
+  createdAt DateTime @default(now())
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  achievementId String // "first" | "streak10" | "perfect" | "expert" и т.д.
+  earnedAt      DateTime @default(now())
+
+  @@unique([userId, achievementId])
+}
+
+model LeaderboardEntry {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id])
+  testsDone Int      @default(0)
+  avgCandy  Float    @default(0)
+  bestCandy Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String // ошибка | предложение | вопрос | другое
+  description String
+  screenshotUrl String?
+  createdAt   DateTime @default(now())
+}
+
+model Changelog {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// Раздел 23 ТЗ: большинство изменений (тексты, цвета, включение ежедневного теста
+// и т.д.) — через админ-панель, без изменения кода. Простая key-value таблица,
+// админ-страница читает/пишет сюда.
+model Setting {
+  key   String @id
+  value String
+}
