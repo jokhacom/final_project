@@ -7,8 +7,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // обычные запросы приложения — через Transaction pooler
+  directUrl = env("DIRECT_URL")   // только для миграций — через Session pooler
 }
 
 enum Role {
@@ -65,25 +66,21 @@ model Material {
   uploadedBy   String // userId суперадминистратора
   createdAt    DateTime       @default(now())
 
-  // Версионирование документов (п.13, п.14 запроса): при замене документа
-  // создаётся новая запись Material, ссылающаяся на предыдущую версию.
-  // Старые вопросы остаются связаны со своей версией документа.
   version      Int            @default(1)
   supersedesId String?
   supersedes   Material?      @relation("MaterialVersions", fields: [supersedesId], references: [id])
   supersededBy Material[]     @relation("MaterialVersions")
-  isActive     Boolean        @default(true) // неактивные версии не используются для новых тестов
+  isActive     Boolean        @default(true)
 
   questions Question[]
   topics    Topic[]
 }
 
-// Раздел 2 и 14 запроса: после чтения документа ИИ группирует материал по темам.
 model Topic {
   id          String   @id @default(cuid())
   materialId  String
   material    Material @relation(fields: [materialId], references: [id])
-  name        String   // например "Приветствие клиента", "Возврат средств"
+  name        String
   description String?
   createdAt   DateTime @default(now())
 
@@ -92,22 +89,20 @@ model Topic {
 }
 
 enum RuleType {
-  REQUIRED       // обязательное требование
-  FORBIDDEN      // запрещённая формулировка/действие
-  RECOMMENDED    // рекомендуемая формулировка
-  EXAMPLE_GOOD   // пример правильного общения
-  EXAMPLE_BAD    // пример неправильного общения
+  REQUIRED
+  FORBIDDEN
+  RECOMMENDED
+  EXAMPLE_GOOD
+  EXAMPLE_BAD
 }
 
-// Раздел 2, 7, 21 запроса: конкретное извлечённое правило — единица истины,
-// на которую ссылается и генерация вопросов, и проверка ответов, и объяснение ошибок.
 model Rule {
   id          String   @id @default(cuid())
   topicId     String
   topic       Topic    @relation(fields: [topicId], references: [id])
   type        RuleType
-  text        String   // само правило в виде, понятном сотруднику
-  sourceQuote String?  // короткая цитата/место в документе, откуда взято правило
+  text        String
+  sourceQuote String?
   createdAt   DateTime @default(now())
 
   questions Question[]
@@ -118,17 +113,14 @@ model Question {
   type             QuestionType
   level            Level
   text             String
-  options          Json? // для MULTIPLE_CHOICE и BEST_RESPONSE: string[]
-  correctIndex     Int? // для MULTIPLE_CHOICE и BEST_RESPONSE
-  expectedKeywords Json? // для OPEN: string[] — вспомогательные подсказки для ИИ-проверки
-  explanation      String? // объяснение правильного ответа и типичных ошибок (п.4 тип 1)
+  options          Json?
+  correctIndex     Int?
+  expectedKeywords Json?
+  explanation      String?
 
   sourceMaterialId String?
   sourceMaterial   Material? @relation(fields: [sourceMaterialId], references: [id])
 
-  // Раздел 21 запроса: у каждого вопроса должна быть прослеживаемая цепочка
-  // Question → Topic → Rule → Source Document. topicId/ruleId необязательны —
-  // старые вопросы (созданные до этой функции или вручную) могут их не иметь.
   topicId String?
   topic   Topic?  @relation(fields: [topicId], references: [id])
   ruleId  String?
@@ -144,7 +136,7 @@ model TestAttempt {
   userId     String
   user       User     @relation(fields: [userId], references: [id])
   level      Level
-  candies    Int // 0-100
+  candies    Int
   startedAt  DateTime @default(now())
   finishedAt DateTime?
 
@@ -157,7 +149,7 @@ model Answer {
   attempt       TestAttempt @relation(fields: [attemptId], references: [id])
   questionId    String
   question      Question    @relation(fields: [questionId], references: [id])
-  rawAnswer     String? // текст открытого ответа или индекс выбранного варианта
+  rawAnswer     String?
   isCorrect     Boolean
   spellingErrors Int        @default(0)
   grammarErrors  Int        @default(0)
@@ -177,7 +169,7 @@ model UserAchievement {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id])
-  achievementId String // "first" | "streak10" | "perfect" | "expert" и т.д.
+  achievementId String
   earnedAt      DateTime @default(now())
 
   @@unique([userId, achievementId])
@@ -196,7 +188,7 @@ model Feedback {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  type        String // ошибка | предложение | вопрос | другое
+  type        String
   description String
   screenshotUrl String?
   createdAt   DateTime @default(now())
@@ -209,9 +201,6 @@ model Changelog {
   createdAt DateTime @default(now())
 }
 
-// Раздел 23 ТЗ: большинство изменений (тексты, цвета, включение ежедневного теста
-// и т.д.) — через админ-панель, без изменения кода. Простая key-value таблица,
-// админ-страница читает/пишет сюда.
 model Setting {
   key   String @id
   value String
