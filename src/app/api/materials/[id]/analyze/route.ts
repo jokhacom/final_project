@@ -9,8 +9,9 @@ import { truncateForAI } from "@/lib/parsing/extractText";
 // (Topic + Rule), НЕ создавая пока вопросы — это отдельный шаг
 // (POST /api/questions/generate с topicId), чтобы Super Admin мог сначала
 // проверить/поправить извлечённые темы и правила перед генерацией заданий.
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
-  const material = await db.material.findUnique({ where: { id: params.id } });
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const material = await db.material.findUnique({ where: { id } });
   if (!material) {
     return NextResponse.json({ error: "Материал не найден" }, { status: 404 });
   }
