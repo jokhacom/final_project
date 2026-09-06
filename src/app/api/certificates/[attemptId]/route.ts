@@ -3,9 +3,10 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { db } from "@/lib/db";
 
 // Раздел 21: результат выше 90 🍬 → автоматически создается сертификат.
-export async function GET(_req: NextRequest, { params }: { params: { attemptId: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ attemptId: string }> }) {
+  const { attemptId } = await params;
   const attempt = await db.testAttempt.findUnique({
-    where: { id: params.attemptId },
+    where: { id: attemptId },
     include: { user: true },
   });
 
