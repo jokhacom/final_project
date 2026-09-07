@@ -1,4 +1,4 @@
-export type Level = "BEGINNER" | "MIDDLE" | "PROFESSIONAL";
+export type Level = "BEGINNER" | "MIDDLE" | "PROFESSIONAL" | "EXAM";
 export type RuleType = "REQUIRED" | "FORBIDDEN" | "RECOMMENDED" | "EXAMPLE_GOOD" | "EXAMPLE_BAD";
 
 export interface GeneratedQuestion {
