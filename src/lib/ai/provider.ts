@@ -1,5 +1,9 @@
 export type Level = "BEGINNER" | "MIDDLE" | "PROFESSIONAL" | "EXAM";
 export type RuleType = "REQUIRED" | "FORBIDDEN" | "RECOMMENDED" | "EXAMPLE_GOOD" | "EXAMPLE_BAD";
+// Язык создаваемых вопросов и игр: как в документе, русский или узбекский (латиница).
+export type ContentLanguage = "auto" | "ru" | "uz";
+export const isContentLanguage = (v: unknown): v is ContentLanguage => v === "auto" || v === "ru" || v === "uz";
+
 export type QuestionType = "MULTIPLE_CHOICE" | "OPEN" | "FIND_ERROR" | "FIX_MESSAGE" | "BEST_RESPONSE";
 
 // Типы заданий с вариантами ответа (проверяются сравнением с correctIndex, без ИИ).
@@ -52,14 +56,14 @@ export interface AIProvider {
   extractKnowledge(materialText: string): Promise<ExtractedTopic[]>;
 
   // Генерация вопросов по конкретной теме и её правилам (Question → Topic).
-  generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level: Level, count: number): Promise<GeneratedQuestion[]>;
+  generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level: Level, count: number, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
 
   // Генерация по всему тексту документа — для материалов без базы знаний.
   // ruleContext — подсказка конкретного правила при перегенерации одного вопроса.
-  generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string): Promise<GeneratedQuestion[]>;
+  generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
 
   // Элементы игр по правилам темы: «Можно или нельзя?» и «Карточки».
-  generateGameItems(topicName: string, rules: ExtractedRule[], count: number): Promise<GeneratedGameItem[]>;
+  generateGameItems(topicName: string, rules: ExtractedRule[], count: number, language?: ContentLanguage): Promise<GeneratedGameItem[]>;
 
   // Проверка СТРОГО по materialContext (правило + цитата, иначе весь текст материала).
   gradeOpenAnswer(question: string, expectedKeywords: string[], answer: string, materialContext: string | null): Promise<GradeResult>;
