@@ -137,6 +137,7 @@ model TestAttempt {
   user       User     @relation(fields: [userId], references: [id])
   level      Level
   candies    Int
+  questionIds Json?    // порядок вопросов, выданных в этой попытке (для разбора и проверки)
   startedAt  DateTime @default(now())
   finishedAt DateTime?
 

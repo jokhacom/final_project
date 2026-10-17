@@ -11,9 +11,9 @@ export const features = {
   // (запасной вариант, если ИИ недоступен), "ai" — проверка через ИИ на основе
   // текста загруженных материалов. По умолчанию "ai", так как точная проверка
   // по смыслу и по документам — обязательное требование.
-  GRADING_MODE: (process.env.GRADING_MODE as "keyword" | "ai") ?? "ai",
+  GRADING_MODE: (process.env.GRADING_MODE as "keyword" | "ai") || "ai",
 
   // Выбор AI-провайдера для генерации вопросов и проверки открытых ответов.
-  // "anthropic" | "openai"
-  AI_PROVIDER: (process.env.AI_PROVIDER as "anthropic" | "openai") ?? "anthropic",
+  // "anthropic" | "gemini" (бесплатный лимит) | "openai"
+  AI_PROVIDER: (process.env.AI_PROVIDER as "anthropic" | "gemini" | "openai") || "anthropic",
 } as const;

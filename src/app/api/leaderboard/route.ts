@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/session";
 
 export async function GET() {
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
+
   const entries = await db.leaderboardEntry.findMany({
-    include: { user: true },
-    orderBy: { bestCandy: "desc" },
+    include: { user: { select: { name: true } } },
+    orderBy: [{ bestCandy: "desc" }, { avgCandy: "desc" }],
     take: 50,
   });
 
@@ -14,6 +18,7 @@ export async function GET() {
     candies: Math.round(e.bestCandy),
     avg: Math.round(e.avgCandy),
     tests: e.testsDone,
+    isMe: e.userId === user.id,
   }));
 
   return NextResponse.json({ rows });

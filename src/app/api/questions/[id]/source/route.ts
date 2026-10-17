@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/session";
 
 // Раздел 21 запроса: у каждого вопроса должна быть прослеживаемая цепочка
 // Question → Topic → Rule → Source Document, чтобы Super Admin мог понять,
 // откуда ИИ взял этот вопрос, и при необходимости удалить/перегенерировать его.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   const question = await db.question.findUnique({
     where: { id },

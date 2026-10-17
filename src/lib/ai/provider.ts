@@ -1,8 +1,14 @@
 export type Level = "BEGINNER" | "MIDDLE" | "PROFESSIONAL" | "EXAM";
 export type RuleType = "REQUIRED" | "FORBIDDEN" | "RECOMMENDED" | "EXAMPLE_GOOD" | "EXAMPLE_BAD";
+export type QuestionType = "MULTIPLE_CHOICE" | "OPEN" | "FIND_ERROR" | "FIX_MESSAGE" | "BEST_RESPONSE";
+
+// Типы заданий с вариантами ответа (проверяются сравнением с correctIndex, без ИИ).
+// Остальные — свободный ответ, проверяются ИИ или по ключевым словам.
+export const CHOICE_TYPES: QuestionType[] = ["MULTIPLE_CHOICE", "BEST_RESPONSE"];
+export const isChoiceType = (t: string) => CHOICE_TYPES.includes(t as QuestionType);
 
 export interface GeneratedQuestion {
-  type: "MULTIPLE_CHOICE" | "OPEN";
+  type: QuestionType;
   text: string;
   options?: string[];
   correctIndex?: number;
@@ -33,23 +39,16 @@ export interface ExtractedTopic {
 // Бизнес-логика (начисление конфет, сохранение в БД, админ-панель)
 // работает с этим интерфейсом и не знает, какой именно AI за ним стоит.
 export interface AIProvider {
-  // Раздел 2, 14, 21 запроса: читает документ целиком и строит базу знаний —
-  // список тем, и внутри каждой темы — конкретные правила с цитатой источника.
-  // Это тот же текст, который затем используется для генерации вопросов и проверки.
+  // Читает документ целиком и строит базу знаний — темы и правила с цитатой источника.
   extractKnowledge(materialText: string): Promise<ExtractedTopic[]>;
 
-  // Генерация вопросов по конкретной теме и её правилам — а не по всему документу
-  // сразу, чтобы каждый вопрос был прослеживаем до конкретной темы (Question → Topic).
+  // Генерация вопросов по конкретной теме и её правилам (Question → Topic).
   generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level: Level, count: number): Promise<GeneratedQuestion[]>;
 
-  // Устаревший путь (по всему тексту документа сразу) — сохранён для обратной
-  // совместимости с материалами, для которых ещё не строилась база знаний.
-  // ruleContext — необязательная подсказка конкретного правила при перегенерации
-  // одного вопроса (см. /api/questions/[id]).
+  // Генерация по всему тексту документа — для материалов без базы знаний.
+  // ruleContext — подсказка конкретного правила при перегенерации одного вопроса.
   generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string): Promise<GeneratedQuestion[]>;
 
-  // materialContext — самый точный доступный контекст для проверки: конкретное
-  // правило + цитата, если вопрос связан с Rule, иначе — весь текст материала.
-  // Проверка выполняется СТРОГО на основе этого текста, а не общих знаний модели.
+  // Проверка СТРОГО по materialContext (правило + цитата, иначе весь текст материала).
   gradeOpenAnswer(question: string, expectedKeywords: string[], answer: string, materialContext: string | null): Promise<GradeResult>;
 }

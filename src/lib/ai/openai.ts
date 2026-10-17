@@ -1,17 +1,21 @@
-import type { AIProvider, ExtractedTopic, GeneratedQuestion, GradeResult, Level } from "./provider";
+import { createProvider } from "./prompts";
 
-// Заготовка второго провайдера. Заполнить аналогично anthropic.ts при необходимости.
-export const openaiProvider: AIProvider = {
-  async extractKnowledge(_materialText: string): Promise<ExtractedTopic[]> {
-    throw new Error("OpenAI provider not implemented yet — fill in src/lib/ai/openai.ts");
-  },
-  async generateQuestionsForTopic(_topicName: string, _rules: import("./provider").ExtractedRule[], _level: Level, _count: number): Promise<GeneratedQuestion[]> {
-    throw new Error("OpenAI provider not implemented yet — fill in src/lib/ai/openai.ts");
-  },
-  async generateQuestions(_materialText: string, _level: Level, _count: number, _ruleContext?: string): Promise<GeneratedQuestion[]> {
-    throw new Error("OpenAI provider not implemented yet — fill in src/lib/ai/openai.ts");
-  },
-  async gradeOpenAnswer(_question: string, _expectedKeywords: string[], _answer: string, _materialContext: string | null): Promise<GradeResult> {
-    throw new Error("OpenAI provider not implemented yet — fill in src/lib/ai/openai.ts");
-  },
-};
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+export const openaiProvider = createProvider(async (prompt, maxTokens) => {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("Не задан OPENAI_API_KEY");
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`OpenAI: ${data?.error?.message ?? res.status}`);
+  return data.choices?.[0]?.message?.content ?? "";
+});

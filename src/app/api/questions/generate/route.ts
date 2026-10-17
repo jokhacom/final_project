@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { aiProvider } from "@/lib/ai";
+import { aiProvider, type GeneratedQuestion } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
+import { isLevel } from "@/lib/levels";
+import { requireAdmin, requireSuperadmin } from "@/lib/session";
 
 // Генерирует банк вопросов. Три режима, от точного к общему:
 // 1) topicId указан → вопросы генерируются по ВСЕМ правилам этой темы,
@@ -12,44 +14,62 @@ import { truncateForAI } from "@/lib/parsing/extractText";
 // 3) ни то ни другое → по всему тексту материала (обратная совместимость со
 //    старыми материалами, для которых база знаний ещё не построена).
 export async function POST(req: NextRequest) {
-  const { materialId, topicId, ruleId, level, count } = await req.json();
+  const admin = await requireSuperadmin();
+  if (admin instanceof NextResponse) return admin;
 
-  const material = await db.material.findUnique({ where: { id: materialId } });
+  const body = await req.json();
+  const { topicId, ruleId, level } = body;
+  if (!isLevel(level) || level === "EXAM") {
+    return NextResponse.json({ error: "Укажите уровень: BEGINNER, MIDDLE или PROFESSIONAL" }, { status: 400 });
+  }
+  const count = Math.min(Math.max(Number(body.count) || 10, 1), 20);
+
+  // Материал можно не передавать — он определяется по теме или правилу.
+  const topic = topicId ? await db.topic.findUnique({ where: { id: topicId }, include: { rules: true } }) : null;
+  const rule = ruleId ? await db.rule.findUnique({ where: { id: ruleId }, include: { topic: true } }) : null;
+  if (topicId && !topic) return NextResponse.json({ error: "Тема не найдена" }, { status: 404 });
+  if (ruleId && !rule) return NextResponse.json({ error: "Правило не найдено" }, { status: 404 });
+
+  const materialId: string | undefined = body.materialId ?? topic?.materialId ?? rule?.topic.materialId;
+  const material = materialId ? await db.material.findUnique({ where: { id: materialId } }) : null;
   if (!material) {
     return NextResponse.json({ error: "Материал не найден" }, { status: 404 });
   }
-
-  let generated;
-  let linkTopicId: string | undefined;
-  let linkRuleId: string | undefined;
-
-  if (topicId) {
-    const topic = await db.topic.findUnique({ where: { id: topicId }, include: { rules: true } });
-    if (!topic) return NextResponse.json({ error: "Тема не найдена" }, { status: 404 });
-
-    generated = await aiProvider.generateQuestionsForTopic(
-      topic.name,
-      topic.rules.map((r) => ({ type: r.type as any, text: r.text, sourceQuote: r.sourceQuote ?? undefined })),
-      level,
-      count ?? 10
+  if (!topic && !rule && !material.content) {
+    return NextResponse.json(
+      { error: "У материала нет извлечённого текста — загрузка не удалась или ссылка ещё не обработана" },
+      { status: 422 }
     );
-    linkTopicId = topic.id;
-  } else if (ruleId) {
-    const rule = await db.rule.findUnique({ where: { id: ruleId }, include: { topic: true } });
-    if (!rule) return NextResponse.json({ error: "Правило не найдено" }, { status: 404 });
-
-    generated = await aiProvider.generateQuestionsForTopic(rule.topic.name, [{ type: rule.type as any, text: rule.text, sourceQuote: rule.sourceQuote ?? undefined }], level, count ?? 10);
-    linkTopicId = rule.topicId;
-    linkRuleId = rule.id;
-  } else {
-    if (!material.content) {
-      return NextResponse.json(
-        { error: "У материала нет извлечённого текста — загрузка не удалась или ссылка ещё не обработана" },
-        { status: 422 }
-      );
-    }
-    generated = await aiProvider.generateQuestions(truncateForAI(material.content), level, count ?? 10);
   }
+
+  let generated: GeneratedQuestion[];
+  try {
+    if (topic) {
+      generated = await aiProvider.generateQuestionsForTopic(
+        topic.name,
+        topic.rules.map((r) => ({ type: r.type, text: r.text, sourceQuote: r.sourceQuote ?? undefined })),
+        level,
+        count
+      );
+    } else if (rule) {
+      generated = await aiProvider.generateQuestionsForTopic(
+        rule.topic.name,
+        [{ type: rule.type, text: rule.text, sourceQuote: rule.sourceQuote ?? undefined }],
+        level,
+        count
+      );
+    } else {
+      generated = await aiProvider.generateQuestions(truncateForAI(material.content!), level, count);
+    }
+  } catch (e) {
+    return NextResponse.json({ error: "ИИ не смог создать вопросы: " + String(e instanceof Error ? e.message : e) }, { status: 502 });
+  }
+  if (!generated.length) {
+    return NextResponse.json({ error: "ИИ не вернул ни одного корректного вопроса, попробуйте ещё раз" }, { status: 502 });
+  }
+
+  const linkTopicId = topic?.id ?? rule?.topicId;
+  const linkRuleId = rule?.id;
 
   const created = await db.$transaction(
     generated.map((q) =>
@@ -75,6 +95,8 @@ export async function POST(req: NextRequest) {
 
 // Список сгенерированных вопросов по материалу — чтобы админ мог проверить их перед публикацией.
 export async function GET(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const materialId = req.nextUrl.searchParams.get("materialId");
   const topicId = req.nextUrl.searchParams.get("topicId");
   const questions = await db.question.findMany({

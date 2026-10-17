@@ -2,13 +2,12 @@
 
 import { useState, type TextareaHTMLAttributes } from "react";
 
-// Раздел 6 запроса: запрет копирования/вставки/вырезания текста в открытых
-// вопросах, чтобы сотрудники не могли вставлять готовые ответы из редполитики.
-// Использовать вместо обычного <textarea> на странице прохождения теста.
+// Запрет копирования/вставки/вырезания текста в открытых вопросах, чтобы
+// сотрудники не вставляли готовые ответы из редполитики.
 export function ProtectedTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const [warning, setWarning] = useState(false);
 
-  function block(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+  function block(e: React.SyntheticEvent<HTMLTextAreaElement>) {
     e.preventDefault();
     setWarning(true);
     setTimeout(() => setWarning(false), 2500);
@@ -18,26 +17,17 @@ export function ProtectedTextarea(props: TextareaHTMLAttributes<HTMLTextAreaElem
     <div style={{ position: "relative" }}>
       <textarea
         {...props}
+        className={`textarea ${props.className ?? ""}`}
         onCopy={block}
         onPaste={block}
         onCut={block}
-        onContextMenu={(e) => e.preventDefault()} // блокирует контекстное меню с "Вставить"
+        onDrop={block}
+        onContextMenu={(e) => e.preventDefault()}
+        autoComplete="off"
+        spellCheck={false}
       />
       {warning && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 8,
-            left: 8,
-            right: 8,
-            background: "#FF5D6C",
-            color: "white",
-            padding: "8px 12px",
-            borderRadius: 8,
-            fontSize: 13,
-            textAlign: "center",
-          }}
-        >
+        <div className="alert alert-error" style={{ position: "absolute", left: 8, right: 8, bottom: 8, textAlign: "center" }}>
           Вставка текста запрещена. Пожалуйста, напишите ответ самостоятельно.
         </div>
       )}

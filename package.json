@@ -4,37 +4,39 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "db push": "prisma generate && prisma migrate deploy && next db push",
-    "postinstall": "prisma generate",
+    "build": "prisma generate && next build",
+    "vercel-build": "prisma generate && prisma db push --accept-data-loss && next build",
     "start": "next start",
-    "prisma:migrate": "prisma migrate dev",
+    "lint": "tsc --noEmit",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "next": "^15.0.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "next-auth": "^4.24.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@prisma/client": "^5.20.0",
     "bcryptjs": "^2.4.3",
-    "zod": "^3.23.0",
-    "pdf-parse": "^1.1.1",
+    "exceljs": "^4.4.0",
     "mammoth": "^1.8.0",
-    "pdf-lib": "^1.17.1",
+    "next": "^15.0.0",
+    "next-auth": "^4.24.0",
     "nodemailer": "^7.0.7",
-    "exceljs": "^4.4.0"
+    "pdf-parse": "^1.1.1",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "zod": "^3.23.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
-    "prisma": "^5.20.0",
-    "typescript": "^5.5.0",
-    "@types/node": "^20.14.0",
-    "@types/react": "^18.3.0",
     "@types/bcryptjs": "^2.4.6",
-    "@types/pdf-parse": "^1.1.4",
+    "@types/node": "^20.14.0",
     "@types/nodemailer": "^6.4.15",
-    "tsx": "^4.16.0"
+    "@types/pdf-parse": "^1.1.4",
+    "@types/react": "^18.3.0",
+    "prisma": "^5.20.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
   }
 }

@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { isAdmin, requireUser } from "@/lib/session";
+import { getCabinet } from "@/lib/cabinet";
 
+// Кабинет сотрудника для администратора (свой кабинет — /api/me).
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await requireUser();
+  if (user instanceof NextResponse) return user;
+
   const { id } = await params;
-  const user = await db.user.findUnique({ where: { id } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  const [attempts, achievements, weakTopics] = await Promise.all([
-    db.testAttempt.findMany({ where: { userId: id }, orderBy: { startedAt: "desc" } }),
-    db.userAchievement.findMany({ where: { userId: id } }),
-    db.weakTopic.findMany({ where: { userId: id }, orderBy: { createdAt: "desc" }, take: 20 }),
-  ]);
-
-  return NextResponse.json({ user, attempts, achievements, weakTopics });
+  if (id !== user.id && !isAdmin(user)) {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+  }
+  const cabinet = await getCabinet(id);
+  if (!cabinet) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+  return NextResponse.json(cabinet);
 }

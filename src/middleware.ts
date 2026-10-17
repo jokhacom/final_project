@@ -1,23 +1,35 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
-// Раздел 2 запроса: роли. Доступ в /admin/* только для ADMIN и SUPERADMIN —
-// обычный сотрудник (EMPLOYEE), даже авторизованный, получает редирект.
+// Все страницы, кроме входа, — только для вошедших (иначе редирект на "/").
+// /admin/* — дополнительно только для ADMIN и SUPERADMIN.
 export default withAuth(
   function middleware(req) {
-    const role = (req.nextauth.token as any)?.role;
-    if (!role || (role !== "ADMIN" && role !== "SUPERADMIN")) {
-      return NextResponse.redirect(new URL("/", req.url));
+    if (req.nextUrl.pathname.startsWith("/admin")) {
+      const role = (req.nextauth.token as any)?.role;
+      if (role !== "ADMIN" && role !== "SUPERADMIN") {
+        return NextResponse.redirect(new URL("/levels", req.url));
+      }
     }
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token, // должен быть залогинен, роль проверяется выше
+      authorized: ({ token }) => !!token,
     },
+    pages: { signIn: "/" },
   }
 );
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/levels",
+    "/test/:path*",
+    "/result/:path*",
+    "/me",
+    "/leaderboard",
+    "/whats-new",
+    "/certificate/:path*",
+  ],
 };

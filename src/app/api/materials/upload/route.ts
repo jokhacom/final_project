@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { db } from "@/lib/db";
 import { extractText } from "@/lib/parsing/extractText";
+import { requireAdmin, requireSuperadmin } from "@/lib/session";
 
-// Принимает настоящий файл (PDF/DOCX/TXT) или ссылку, сохраняет на диск,
-// сразу извлекает текст и пишет запись Material со статусом PENDING.
-// После этого админ (или автоматически) вызывает /api/questions/generate,
-// который читает material.content и создаёт вопросы через aiProvider.
-//
-// TODO продакшн: вместо локальной файловой системы — загрузка в S3/облачное
-// хранилище (Vercel не хранит файлы между деплоями на диске).
+// Принимает файл (PDF/DOCX/TXT), сразу извлекает текст и пишет запись Material
+// со статусом PENDING. Сам файл не сохраняется: на Vercel диск только для чтения,
+// а для базы знаний и проверки ответов нужен только извлечённый текст (content).
+// Дальше — /api/materials/[id]/analyze (темы и правила) и /api/questions/generate.
 export async function POST(req: NextRequest) {
+  const admin = await requireSuperadmin();
+  if (admin instanceof NextResponse) return admin;
+
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
-  const sourceUrl = formData.get("sourceUrl") as string | null;
-  const uploadedBy = formData.get("uploadedBy") as string;
+  const sourceUrl = (formData.get("sourceUrl") as string | null) || null;
   const title = (formData.get("title") as string) || file?.name || "Без названия";
   const replaceMaterialId = formData.get("replaceMaterialId") as string | null; // раздел 13: заменить документ новой версией
 
@@ -24,7 +23,6 @@ export async function POST(req: NextRequest) {
   }
 
   let type: string;
-  let filePath: string | null = null;
   let content: string | null = null;
 
   if (file) {
@@ -35,14 +33,8 @@ export async function POST(req: NextRequest) {
     type = ext;
 
     const buffer = Buffer.from(await file.arrayBuffer());
-
-    const uploadsDir = path.join(process.cwd(), "uploads");
-    await mkdir(uploadsDir, { recursive: true });
-    filePath = path.join(uploadsDir, `${Date.now()}-${file.name}`);
-    await writeFile(filePath, buffer);
-
     try {
-      content = await extractText(buffer, ext as "pdf" | "docx" | "txt");
+      content = (await extractText(buffer, ext as "pdf" | "docx" | "txt")).trim() || null;
     } catch (e) {
       return NextResponse.json({ error: "Не удалось прочитать файл: " + String(e) }, { status: 422 });
     }
@@ -66,10 +58,9 @@ export async function POST(req: NextRequest) {
     data: {
       title,
       type,
-      filePath,
       sourceUrl: sourceUrl ?? undefined,
       content,
-      uploadedBy,
+      uploadedBy: admin.id,
       version,
       supersedesId: replaceMaterialId ?? undefined,
       status: content ? "PENDING" : "FAILED",
@@ -81,6 +72,8 @@ export async function POST(req: NextRequest) {
 
 // Список материалов для админ-панели (карточки с кнопкой «Сгенерировать вопросы»).
 export async function GET() {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const materials = await db.material.findMany({
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { questions: true } } },

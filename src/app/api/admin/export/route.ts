@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/session";
 
 // Раздел 3 запроса: экспорт результатов в Excel.
 // GET /api/admin/export?userId=...&from=2026-01-01&to=2026-01-31
 // userId не указан → экспорт по всем сотрудникам.
 export async function GET(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
   const userId = req.nextUrl.searchParams.get("userId");
   const from = req.nextUrl.searchParams.get("from");
   const to = req.nextUrl.searchParams.get("to");

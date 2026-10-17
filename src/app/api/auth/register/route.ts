@@ -14,6 +14,9 @@ export async function POST(req: NextRequest) {
     if (!name?.trim() || !username?.trim() || !password) {
       return NextResponse.json({ error: "Заполните имя, логин и пароль" }, { status: 400 });
     }
+    if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username.trim())) {
+      return NextResponse.json({ error: "Логин: 3–32 символа, латинские буквы, цифры, точка, дефис или подчёркивание" }, { status: 400 });
+    }
     if (password.length < 6) {
       return NextResponse.json({ error: "Пароль должен быть не короче 6 символов" }, { status: 400 });
     }
@@ -34,8 +37,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ user: { id: user.id, name: user.name, username: user.username } });
   } catch (e) {
-    // ВРЕМЕННО для отладки — показываем настоящую причину ошибки на экране,
-    // чтобы не зависеть от логов Vercel. Убрать после того, как всё заработает.
-    return NextResponse.json({ error: "DEBUG: " + String(e instanceof Error ? e.message : e) }, { status: 500 });
+    console.error("Register failed:", e);
+    return NextResponse.json({ error: "Не удалось зарегистрироваться. Попробуйте ещё раз позже." }, { status: 500 });
   }
 }

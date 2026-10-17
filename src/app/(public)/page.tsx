@@ -1,96 +1,90 @@
 "use client";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-// Раздел 1 запроса: вход только по логину и паролю. Переключатель между
-// формой входа и формой регистрации на одной странице.
+// Вход только по логину и паролю; регистрация сотрудника — на этой же странице.
 export default function AuthPage() {
+  const { status } = useSession();
+  const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
-  async function handleLogin() {
-    setLoading(true);
-    setError(null);
-    const res = await signIn("credentials", { username, password, redirect: false });
-    setLoading(false);
-    if (res?.error) {
-      setError("Неверный логин или пароль");
-      return;
-    }
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/levels");
+  }, [status, router]);
+
+  async function login() {
+    const res = await signIn("credentials", { username: username.trim(), password, redirect: false });
+    if (res?.error) throw new Error("Неверный логин или пароль");
     router.push("/levels");
   }
 
-  async function handleRegister() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, username, password }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) {
-      setError(data.error);
-      return;
+    try {
+      if (mode === "register") {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Не удалось зарегистрироваться");
+      }
+      await login();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setLoading(false);
     }
-    // Сразу входим после регистрации
-    await signIn("credentials", { username, password, redirect: false });
-    router.push("/levels");
   }
+
+  const canSubmit = username.trim() && password && (mode === "login" || name.trim());
 
   return (
-    <div style={{ maxWidth: 420, margin: "80px auto", padding: 24, fontFamily: "sans-serif", textAlign: "center" }}>
-      <div style={{ fontSize: 48 }}>🍭</div>
-      <h1>Тренажер знаний ГЦО</h1>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, justifyContent: "center" }}>
-        <button onClick={() => setMode("login")} style={{ fontWeight: mode === "login" ? 700 : 400, padding: "6px 12px" }}>
-          Вход
-        </button>
-        <button onClick={() => setMode("register")} style={{ fontWeight: mode === "register" ? 700 : 400, padding: "6px 12px" }}>
-          Регистрация
-        </button>
+    <main className="container" style={{ maxWidth: 440, paddingTop: 48 }}>
+      <div className="center" style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 64 }}>🍭</div>
+        <h1>Тренажер знаний ГЦО</h1>
+        <p className="muted">Проверьте знание Редполитики и Tone of Voice, соберите 100 🍬 и получите сертификат</p>
       </div>
 
-      {mode === "register" && (
+      <form className="card stack" onSubmit={handleSubmit}>
+        <div className="tabs">
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+            Вход
+          </button>
+          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+            Регистрация
+          </button>
+        </div>
+
+        {mode === "register" && (
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя и фамилия" autoComplete="name" />
+        )}
+        <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Логин" autoComplete="username" />
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Ваше имя"
-          style={{ width: "100%", padding: 12, marginBottom: 10, boxSizing: "border-box" }}
+          className="input"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={mode === "register" ? "Пароль (не короче 6 символов)" : "Пароль"}
+          autoComplete={mode === "register" ? "new-password" : "current-password"}
         />
-      )}
-      <input
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="Логин"
-        style={{ width: "100%", padding: 12, marginBottom: 10, boxSizing: "border-box" }}
-      />
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Пароль"
-        style={{ width: "100%", padding: 12, marginBottom: 16, boxSizing: "border-box" }}
-      />
 
-      {error && <div style={{ color: "crimson", marginBottom: 12, fontSize: 13 }}>{error}</div>}
+        {error && <div className="alert alert-error">{error}</div>}
 
-      <button
-        onClick={mode === "login" ? handleLogin : handleRegister}
-        disabled={loading || !username.trim() || !password || (mode === "register" && !name.trim())}
-        style={{ width: "100%", padding: 12, background: "#7C4DFF", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
-      >
-        {loading ? "..." : mode === "login" ? "Войти →" : "Зарегистрироваться →"}
-      </button>
-    </div>
+        <button className="btn btn-primary btn-block" type="submit" disabled={loading || !canSubmit}>
+          {loading ? "Подождите..." : mode === "login" ? "Войти →" : "Зарегистрироваться →"}
+        </button>
+      </form>
+    </main>
   );
 }
