@@ -18,6 +18,7 @@ export interface ReviewItem {
   explanation: string | null;
   rule: string | null;
   unanswered: boolean;
+  reviewed: boolean;
 }
 
 export interface AttemptResult {

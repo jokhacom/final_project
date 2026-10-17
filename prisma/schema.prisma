@@ -158,6 +158,8 @@ model Answer {
   spellingErrors Int        @default(0)
   grammarErrors  Int        @default(0)
   aiComment     String?
+  reviewedAt    DateTime?   // ответ проверен администратором вручную
+  reviewedBy    String?     // id администратора, который проверил
   createdAt     DateTime    @default(now())
 }
 

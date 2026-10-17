@@ -109,6 +109,7 @@ function ReviewCard({ item: r }: { item: ReviewItem }) {
         <span className="muted small">Вопрос {r.n}</span>
         <span style={{ fontWeight: 900, color: r.isCorrect ? "var(--success)" : "var(--danger)" }}>
           {r.isCorrect ? "✅ Верно" : "❌ Неверно · −5 🍬"}
+          {r.reviewed && <span className="muted small" style={{ fontWeight: 600 }}> · проверено</span>}
         </span>
       </div>
       <p style={{ fontWeight: 800, whiteSpace: "pre-wrap", margin: "8px 0 12px" }}>{r.text}</p>
@@ -148,7 +149,7 @@ function ReviewCard({ item: r }: { item: ReviewItem }) {
           )}
           {r.comment && (
             <div>
-              <div className="small muted">Комментарий проверки</div>
+              <div className="small muted">{r.reviewed ? "Комментарий проверяющего" : "Комментарий проверки"}</div>
               <div className="answer-box info">{r.comment}</div>
             </div>
           )}
