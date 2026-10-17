@@ -22,10 +22,14 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin;
 
   const level = req.nextUrl.searchParams.get("level");
-  const questions = await db.question.findMany({
-    where: level ? { level: level as any } : undefined,
-    include: { sourceMaterial: { select: { title: true, version: true } }, topic: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-  return NextResponse.json({ questions });
+  const archived = req.nextUrl.searchParams.get("archived") === "1";
+  const [questions, archivedCount] = await Promise.all([
+    db.question.findMany({
+      where: { ...(level ? { level: level as any } : {}), archivedAt: archived ? { not: null } : null },
+      include: { sourceMaterial: { select: { title: true, version: true } }, topic: { select: { name: true } } },
+      orderBy: archived ? { archivedAt: "desc" } : { createdAt: "desc" },
+    }),
+    db.question.count({ where: { archivedAt: { not: null } } }),
+  ]);
+  return NextResponse.json({ questions, archivedCount });
 }

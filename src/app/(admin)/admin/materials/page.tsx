@@ -89,8 +89,14 @@ export default function MaterialsAdminPage() {
   const [title, setTitle] = useState("");
   const [replaceId, setReplaceId] = useState("");
   const [autoCreate, setAutoCreate] = useState(true);
-  const [perTopic, setPerTopic] = useState(4);
-  const [gamesPerTopic, setGamesPerTopic] = useState(3);
+  // Поля храним строкой, чтобы цифру можно было стереть и набрать заново (иначе
+  // пустое поле сразу превращалось в «1», и «2» набиралось как «12»).
+  const [perTopicText, setPerTopicText] = useState("3");
+  const [gamesPerTopicText, setGamesPerTopicText] = useState("3");
+  // 0 — этот вид не создаётся.
+  const perTopic = Math.max(0, Math.round(Number(perTopicText)) || 0);
+  const gamesPerTopic = Math.max(0, Math.round(Number(gamesPerTopicText)) || 0);
+  const [language, setLanguage] = useState<"auto" | "ru" | "uz">("auto");
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [topicsByMaterial, setTopicsByMaterial] = useState<Record<string, Topic[]>>({});
@@ -172,6 +178,7 @@ export default function MaterialsAdminPage() {
   // Вопросы по всем темам для трёх уровней. Темы, где вопросы этого уровня уже есть, пропускаются.
   async function generateAll(materialId: string) {
     const topics = await loadTopics(materialId);
+    if (perTopic === 0) return { created: 0, failed: 0, jobs: 0 };
     const jobs = topics.flatMap((t) =>
       LEVELS.filter((l) => !t.questions.some((q) => q.level === l.id)).map((l) => ({ topic: t, level: l }))
     );
@@ -183,7 +190,7 @@ export default function MaterialsAdminPage() {
       step({ materialId, stage: `Создаём вопросы: ${i + 1} из ${jobs.length} — «${topic.name}», ${level.label}`, done: i, total: jobs.length });
       try {
         for (const count of batches(perTopic)) {
-          const r = await withRetry(() => post("/api/questions/generate", { topicId: topic.id, level: level.id, count }));
+          const r = await withRetry(() => post("/api/questions/generate", { topicId: topic.id, level: level.id, count, language }));
           created += r.questions.length;
         }
       } catch (e) {
@@ -199,6 +206,7 @@ export default function MaterialsAdminPage() {
   // По одному запросу к ИИ на тему; темы, где игры уже есть, пропускаются.
   async function generateGames(materialId: string) {
     const topics = await loadTopics(materialId);
+    if (gamesPerTopic === 0) return { created: 0, failed: 0, todo: 0 };
     const todo = topics.filter((t) => !t._count.gameItems);
     let created = 0;
     let failed = 0;
@@ -208,7 +216,7 @@ export default function MaterialsAdminPage() {
       step({ materialId, stage: `Создаём игры: ${i + 1} из ${todo.length} — «${t.name}»`, done: i, total: todo.length });
       try {
         for (const count of batches(gamesPerTopic)) {
-          const r = await withRetry(() => post("/api/learning/games/generate", { topicId: t.id, count }));
+          const r = await withRetry(() => post("/api/learning/games/generate", { topicId: t.id, count, language }));
           created += r.created;
         }
       } catch (e) {
@@ -277,6 +285,7 @@ export default function MaterialsAdminPage() {
   }
 
   const createGames = (m: Material) => {
+    if (gamesPerTopic === 0) return setNotice("В «Настройках создания» стоит 0 элементов игр на тему — укажите число больше 0.");
     if (!confirm(`Создать игры («Можно или нельзя?» и «Карточки») по темам документа «${m.title}»? По ${gamesPerTopic} фразы и ${gamesPerTopic} карточки на тему.`)) return;
     return run(`games:${m.id}`, async () => {
       const g = await generateGames(m.id);
@@ -317,7 +326,7 @@ export default function MaterialsAdminPage() {
     run(key, async () => {
       let created = 0;
       for (const count of batches(perTopic)) {
-        const r = await post("/api/questions/generate", { topicId, level, count });
+        const r = await post("/api/questions/generate", { topicId, level, count, language });
         created += r.questions.length;
       }
       setNotice(`Создано вопросов: ${created}. Проверить и поправить их можно в разделе «Вопросы».`);
@@ -360,29 +369,6 @@ export default function MaterialsAdminPage() {
                 <input type="checkbox" checked={autoCreate} onChange={(e) => setAutoCreate(e.target.checked)} />
                 Сразу создать тесты после загрузки
               </label>
-              <label className="row small">
-                Вопросов на тему для каждого уровня:
-                <input
-                  className="input"
-                  style={{ width: 70, padding: "6px 8px" }}
-                  type="number"
-                  min={1}
-                  value={perTopic}
-                  onChange={(e) => setPerTopic(Math.max(1, Math.round(Number(e.target.value)) || 1))}
-                />
-                <span className="muted">(для книги с десятками тем хватит 2–4)</span>
-              </label>
-              <label className="row small">
-                Для «🎮 Создать игры» — элементов на тему:
-                <input
-                  className="input"
-                  style={{ width: 70, padding: "6px 8px" }}
-                  type="number"
-                  min={1}
-                  value={gamesPerTopic}
-                  onChange={(e) => setGamesPerTopic(Math.max(1, Math.round(Number(e.target.value)) || 1))}
-                />
-              </label>
 
             </>
           )}
@@ -392,6 +378,46 @@ export default function MaterialsAdminPage() {
             </button>
           </div>
           <div className="muted small">Файл до ~4 МБ. PDF должен содержать текст (не сканы страниц).</div>
+        </div>
+      )}
+
+      {isSuper && aiOn && (
+        <div className="card stack">
+          <h2>⚙️ Настройки создания</h2>
+          <div className="muted small" style={{ marginTop: -8 }}>Действуют для «🤖 Создать тесты», «🎮 Создать игры» и кнопок «+» у тем.</div>
+          <label className="row small">
+            Язык вопросов и игр:
+            <select className="select" style={{ width: "auto", padding: "6px 10px" }} value={language} onChange={(e) => setLanguage(e.target.value as typeof language)}>
+              <option value="auto">Как в документе</option>
+              <option value="ru">🇷🇺 Русский</option>
+              <option value="uz">🇺🇿 Oʻzbekcha (lotin)</option>
+            </select>
+          </label>
+          <label className="row small">
+            Вопросов на тему для каждого уровня:
+            <input
+              className="input"
+              style={{ width: 80, padding: "6px 8px" }}
+              type="number"
+              min={0}
+              value={perTopicText}
+              onChange={(e) => setPerTopicText(e.target.value)}
+              onBlur={() => setPerTopicText(String(perTopic))}
+            />
+            <span className="muted">(для большого документа с десятками тем хватит 2–3; 0 — только темы, без вопросов)</span>
+          </label>
+          <label className="row small">
+            Для «🎮 Создать игры» — элементов на тему:
+            <input
+              className="input"
+              style={{ width: 80, padding: "6px 8px" }}
+              type="number"
+              min={0}
+              value={gamesPerTopicText}
+              onChange={(e) => setGamesPerTopicText(e.target.value)}
+              onBlur={() => setGamesPerTopicText(String(gamesPerTopic))}
+            />
+          </label>
         </div>
       )}
 
@@ -502,7 +528,7 @@ export default function MaterialsAdminPage() {
                         <button
                           key={l.id}
                           className="btn btn-ghost btn-sm"
-                          disabled={!!busy}
+                          disabled={!!busy || perTopic === 0}
                           onClick={() => generateOne(m.id, topic.id, l.id, `topic:${topic.id}:${l.id}`)}
                         >
                           {busy === `topic:${topic.id}:${l.id}` ? "Генерируем..." : `+ ${perTopic} ${l.label}`}

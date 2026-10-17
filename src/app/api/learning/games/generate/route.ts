@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { aiProvider } from "@/lib/ai";
+import { aiProvider, isContentLanguage } from "@/lib/ai";
 import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
 import { requireSuperadmin } from "@/lib/session";
 import { validateGameItem } from "@/lib/games";
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (admin instanceof NextResponse) return admin;
   if (!features.AI_CONFIGURED) return NextResponse.json({ error: AI_NOT_CONFIGURED_MESSAGE }, { status: 503 });
 
-  const { topicId, count } = await req.json();
+  const { topicId, count, language } = await req.json();
   const topic = await db.topic.findUnique({ where: { id: topicId }, include: { rules: true } });
   if (!topic) return NextResponse.json({ error: "Тема не найдена" }, { status: 404 });
   // Один запрос — до 10 элементов каждой игры; больше браузер запрашивает порциями.
@@ -24,7 +24,8 @@ export async function POST(req: NextRequest) {
     generated = await aiProvider.generateGameItems(
       topic.name,
       topic.rules.map((r) => ({ type: r.type, text: r.text, sourceQuote: r.sourceQuote ?? undefined })),
-      n
+      n,
+      isContentLanguage(language) ? language : "auto"
     );
   } catch (e) {
     return NextResponse.json({ error: "ИИ не смог создать игры: " + (e instanceof Error ? e.message : String(e)) }, { status: 502 });

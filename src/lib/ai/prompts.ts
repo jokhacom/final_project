@@ -1,4 +1,4 @@
-import type { AIProvider, ExtractedRule, GeneratedGameItem, GeneratedQuestion, Level } from "./provider";
+import type { AIProvider, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedQuestion, Level } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
@@ -13,6 +13,15 @@ const LEVEL_LABEL: Record<Level, string> = {
   PROFESSIONAL: "Professional — сложные и конфликтные случаи, нюансы тона",
   EXAM: "Итоговый экзамен — смешанная сложность",
 };
+
+// Правила узбекской орфографии (латиница), как в орфографическом словаре imlo.uz.
+const UZ_ORTHOGRAPHY = `узбекском языке латиницей строго по действующим правилам узбекской орфографии (как в орфографическом словаре imlo.uz): буквы oʻ и gʻ пиши со знаком ʻ (например: koʻp, togʻri), разделительный знак — ʼ (tutuq belgisi: maʼlumot, taʼlim, sanʼat), сочетания sh, ch, ng; не смешивай с кириллицей, не вставляй русские слова, если есть узбекские; следи за x/h и q/k (xizmat, hisob, qarz, kerak)`;
+
+function languageRule(language: ContentLanguage = "auto"): string {
+  if (language === "ru") return "Язык: пиши всё (текст, варианты, ключевые слова, пояснения) на русском языке, даже если правила на другом языке.";
+  if (language === "uz") return `Язык: пиши всё (текст, варианты, ключевые слова, пояснения) на ${UZ_ORTHOGRAPHY}, даже если правила на русском.`;
+  return `Язык: пиши на том же языке, что и правила выше. Если правила на узбекском — пиши на ${UZ_ORTHOGRAPHY}. Если на русском — по-русски.`;
+}
 
 const QUESTION_FORMAT = `Типы заданий:
 - MULTIPLE_CHOICE — вопрос и 4 варианта, один правильный;
@@ -106,6 +115,7 @@ ${materialText}
 - EXAMPLE_BAD (пример неправильного общения)
 
 Правила формулируй понятно для сотрудника, кратко (одно предложение). Выпиши самые важные — не больше 8 тем и 25 правил на фрагмент. Добавь короткую цитату из документа (sourceQuote).
+Темы и правила пиши на том же языке, что и документ (не переводи). Узбекский текст — латиницей по правилам современной орфографии (oʻ, gʻ, ʼ).
 Название темы — короткое и общее (2–4 слова, например «Обращение к клиенту», «Задолженность и оплата»), чтобы одинаковые темы из разных частей документа совпадали по названию.
 НЕ придумывай правила, которых нет в тексте. Если во фрагменте нет правил (оглавление, титульный лист), верни пустой массив [].
 
@@ -114,7 +124,7 @@ ${materialText}
       return parseJson(await complete(prompt, 12000, { fast: true }));
     },
 
-    async generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level, count) {
+    async generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level, count, language) {
       const rulesText = rules
         .map((r, i) => `${i + 1}. [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`)
         .join("\n");
@@ -125,11 +135,12 @@ ${materialText}
 ${rulesText}
 
 Создай ${count} заданий, каждое проверяет одно из перечисленных правил.
+${languageRule(language)}
 ${QUESTION_FORMAT}`;
       return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })));
     },
 
-    async generateQuestions(materialText, level, count, ruleContext) {
+    async generateQuestions(materialText, level, count, ruleContext, language) {
       const ruleBlock = ruleContext
         ? `Создавай задание ИМЕННО по этому правилу:\n"""\n${ruleContext}\n"""\nДокумент ниже — только контекст.`
         : `Создавай задания на основе всего документа ниже.`;
@@ -143,11 +154,12 @@ ${materialText}
 """
 
 Создай ${count} заданий, основанных ТОЛЬКО на содержании документа.
+${languageRule(language).replace("правила выше", "документ")}
 ${QUESTION_FORMAT}`;
       return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })));
     },
 
-    async generateGameItems(topicName, rules, count) {
+    async generateGameItems(topicName, rules, count, language) {
       const rulesText = rules
         .map((r, i) => `${i + 1}. [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`)
         .join("\n");
@@ -158,6 +170,7 @@ ${rulesText}
 Создай ${count} элементов игры «Можно или нельзя?» (kind: TRUE_FALSE): короткая реплика сотрудника клиенту (1–2 предложения, как в реальном чате), isCorrect — можно ли так ответить по правилам. Примерно половина допустимых, половина с нарушением правила.
 И ${count} карточек (kind: FLASHCARD): prompt — короткая ситуация с клиентом, answer — как правильно поступить или ответить (1–2 предложения).
 У каждого элемента explanation — одно предложение, почему так, со ссылкой на правило.
+${languageRule(language)}
 Ответь строго JSON-массивом без markdown:
 [{"kind":"TRUE_FALSE","prompt":"...","isCorrect":false,"explanation":"..."},
  {"kind":"FLASHCARD","prompt":"...","answer":"...","explanation":"..."}]`;
@@ -183,6 +196,7 @@ ${contextBlock}
 Ожидаемые темы (вспомогательно, не обязательно дословно): ${expectedKeywords.join(", ") || "—"}
 Ответ сотрудника: "${answer}"
 
+Если ответ сотрудника на узбекском — орфографические ошибки считай по правилам современной узбекской орфографии (imlo.uz, латиница); простой апостроф вместо ʻ (o', g') ошибкой не считай. Комментарий пиши на языке ответа сотрудника.
 Оцени смысловую правильность строго по материалу (перефразированный правильный ответ засчитывается), посчитай орфографические и грамматические ошибки в ответе.
 В комментарии (2–4 предложения, обращение на «вы») объясни, ПОЧЕМУ ответ принят или нет, со ссылкой на конкретное правило, и каким должен быть правильный ответ. Если в материале нет подходящего правила — так и напиши.
 Ответь строго JSON без markdown:

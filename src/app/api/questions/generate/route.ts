@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
-import { aiProvider, type GeneratedQuestion } from "@/lib/ai";
+import { aiProvider, isContentLanguage, type GeneratedQuestion } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
 import { isLevel } from "@/lib/levels";
 import { requireAdmin, requireSuperadmin } from "@/lib/session";
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const language = isContentLanguage(body.language) ? body.language : "auto";
   let generated: GeneratedQuestion[];
   try {
     if (topic) {
@@ -54,17 +55,19 @@ export async function POST(req: NextRequest) {
         topic.name,
         topic.rules.map((r) => ({ type: r.type, text: r.text, sourceQuote: r.sourceQuote ?? undefined })),
         level,
-        count
+        count,
+        language
       );
     } else if (rule) {
       generated = await aiProvider.generateQuestionsForTopic(
         rule.topic.name,
         [{ type: rule.type, text: rule.text, sourceQuote: rule.sourceQuote ?? undefined }],
         level,
-        count
+        count,
+        language
       );
     } else {
-      generated = await aiProvider.generateQuestions(truncateForAI(material.content!), level, count);
+      generated = await aiProvider.generateQuestions(truncateForAI(material.content!), level, count, undefined, language);
     }
   } catch (e) {
     return NextResponse.json({ error: "ИИ не смог создать вопросы: " + String(e instanceof Error ? e.message : e) }, { status: 502 });

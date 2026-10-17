@@ -98,13 +98,11 @@ export default function AdminHome() {
         ...status.levels.map((l) => ({
           ok: l.ready,
           label: `${levelInfo(l.id).label}: ${l.total} вопросов (${l.choice} с вариантами, ${l.open} открытых)`,
-          hint: l.ready
-            ? l.balanced
+          hint: !l.ready
+            ? "нет вопросов — уровень скрыт у сотрудников"
+            : l.full
               ? undefined
-              : `лучше минимум ${Math.floor(l.needed / 2)} + ${Math.floor(l.needed / 2)}`
-            : l.id === "EXAM"
-              ? "нужно 30% / 30% / 40% вопросов по уровням"
-              : `нужно минимум ${l.needed}`,
+              : `в тесте будет ${l.inTest} из ${l.needed} (сколько есть)`,
         })),
         {
           ok: status.ai.configured,

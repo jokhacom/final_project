@@ -54,14 +54,19 @@ export async function POST(req: NextRequest) {
       ...pick(middle, Math.ceil(split.MIDDLE / 2), Math.floor(split.MIDDLE / 2)),
       ...pick(professional, Math.ceil(split.PROFESSIONAL / 2), Math.floor(split.PROFESSIONAL / 2)),
     ];
+    // Если на каком-то уровне вопросов мало — добираем вопросами других уровней.
+    const taken = new Set(picked.map((q) => q.id));
+    const rest = sample([...beginner, ...middle, ...professional].filter((q) => !taken.has(q.id)), Infinity);
+    picked = [...picked, ...rest.slice(0, Math.max(0, n - picked.length))];
   } else {
     const pool = await db.question.findMany({ where: { level, ...activeOnly }, select });
     picked = pick(pool, Math.ceil(n / 2), Math.floor(n / 2));
   }
 
-  if (picked.length < n) {
+  // В тесте — сколько есть, но не больше настройки «вопросов в тесте».
+  if (picked.length === 0) {
     return NextResponse.json(
-      { error: "Для этого уровня пока недостаточно вопросов. Попросите администратора добавить материалы и вопросы." },
+      { error: "Для этого уровня пока нет вопросов. Попросите администратора добавить материалы и вопросы." },
       { status: 422 }
     );
   }

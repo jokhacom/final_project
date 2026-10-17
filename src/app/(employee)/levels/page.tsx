@@ -6,10 +6,19 @@ import { useSession } from "next-auth/react";
 import { LEVELS } from "@/lib/levels";
 import { formatPenalty } from "@/lib/scoring";
 
+// «1 вопрос», «3 вопроса», «10 вопросов»
+function plural(n: number) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "вопрос";
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "вопроса";
+  return "вопросов";
+}
+
 export default function LevelsPage() {
   const { data: session } = useSession();
   const firstName = session?.user?.name?.split(" ")[0];
   const [ready, setReady] = useState<Record<string, boolean> | null>(null);
+  const [inTest, setInTest] = useState<Record<string, number>>({});
   const [minutes, setMinutes] = useState(15);
   const [count, setCount] = useState(10);
 
@@ -18,6 +27,7 @@ export default function LevelsPage() {
       .then((r) => r.json())
       .then((d) => {
         setReady(Object.fromEntries((d.levels ?? []).map((l: { id: string; ready: boolean }) => [l.id, l.ready])));
+        setInTest(Object.fromEntries((d.levels ?? []).map((l: { id: string; inTest: number }) => [l.id, l.inTest])));
         if (d.minutes) setMinutes(d.minutes);
         if (d.count) setCount(d.count);
       })
@@ -28,7 +38,7 @@ export default function LevelsPage() {
     <main className="container">
       <h1>Привет{firstName ? `, ${firstName}` : ""}! 👋</h1>
       <p className="muted">
-        Выберите уровень. Каждая попытка — новый набор вопросов: {Math.ceil(count / 2)} с вариантами ответа и {Math.floor(count / 2)} открытых.
+        Выберите уровень. Каждая попытка — новый случайный набор вопросов: с вариантами ответа и открытые.
       </p>
 
       <div className="grid grid-2 mt">
@@ -38,7 +48,9 @@ export default function LevelsPage() {
               <div style={{ fontSize: 34 }}>{l.icon}</div>
               <div className="level-title">{l.label}</div>
               <div className="muted">{l.description}</div>
-              <div className="level-meta">{count} вопросов · {minutes} мин · до 100 🍬</div>
+              <div className="level-meta">
+                {inTest[l.id] || count} {plural(inTest[l.id] || count)} · {minutes} мин · до 100 🍬
+              </div>
             </>
           );
           // Пока вопросов для уровня недостаточно — карточка неактивна.
@@ -64,7 +76,8 @@ export default function LevelsPage() {
         <h3>Как считаются 🍬</h3>
         <ul className="muted small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
           <li>
-            Старт — 100 🍬. Неверный ответ — −{formatPenalty(count)}, орфографическая ошибка — −1, грамматическая — −1.
+            Старт — 100 🍬. За неверный ответ снимается доля от 50 🍬 (в тесте из {count} вопросов — −{formatPenalty(count)}), орфографическая
+            ошибка — −1, грамматическая — −1.
           </li>
           <li>Вставлять текст в открытые ответы нельзя — пишите своими словами.</li>
           <li>Больше 90 🍬 — сертификат. 95+ на уровне Professional — достижение «Эксперт ГЦО» 👑.</li>

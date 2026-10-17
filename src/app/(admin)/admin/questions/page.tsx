@@ -28,15 +28,19 @@ export default function QuestionsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [showArchive, setShowArchive] = useState(false);
+  const [archivedCount, setArchivedCount] = useState(0);
   const status = useAdminStatus([reload]);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ ok?: string; error?: string; errors?: string[] } | null>(null);
 
   async function load() {
-    const res = await fetch(`/api/questions/manual${level ? `?level=${level}` : ""}`);
+    const params = new URLSearchParams({ ...(level && { level }), ...(showArchive && { archived: "1" }) });
+    const res = await fetch(`/api/questions/manual?${params}`);
     const data = await res.json();
     setQuestions(data.questions ?? []);
+    setArchivedCount(data.archivedCount ?? 0);
     setReload((n) => n + 1);
   }
 
@@ -59,15 +63,23 @@ export default function QuestionsPage() {
   }
 
   useEffect(() => {
+    setQuestions(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level]);
+  }, [level, showArchive]);
 
-  async function act(id: string, method: "DELETE" | "POST") {
-    if (method === "DELETE" && !confirm("Удалить вопрос? Ответы сотрудников на него тоже удалятся.")) return;
+  async function act(id: string, method: "DELETE" | "POST" | "ARCHIVE" | "RESTORE") {
+    if (method === "DELETE" && !confirm("Удалить вопрос навсегда? Вернуть его будет нельзя, ответы сотрудников на него тоже удалятся.")) return;
     setBusy(id);
     setError(null);
-    const res = await fetch(`/api/questions/${id}`, { method });
+    const res =
+      method === "ARCHIVE" || method === "RESTORE"
+        ? await fetch(`/api/questions/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ archived: method === "ARCHIVE" }),
+          })
+        : await fetch(`/api/questions/${id}`, { method });
     const data = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) setError(data.error ?? "Ошибка");
@@ -88,8 +100,8 @@ export default function QuestionsPage() {
         </Link>
       </div>
       <p className="muted small">
-        Для теста нужно на каждый уровень не меньше вопросов, чем в одном тесте (настройка на «Обзоре», по умолчанию 10: 5 с вариантами + 5
-        открытых). Сгенерировать вопросы ИИ можно в разделе «Материалы».
+        Уровень открывается у сотрудников, как только в нём есть хотя бы 1 вопрос. В тест попадает столько вопросов, сколько есть, но не
+        больше настройки «вопросов в тесте» на «Обзоре». «🗄 В архив» убирает вопрос из тестов — вернуть его можно в любой момент.
       </p>
 
       <div className="card stack" style={{ marginBottom: 16 }}>
@@ -123,6 +135,18 @@ export default function QuestionsPage() {
         )}
       </div>
 
+      <div className="tabs" style={{ maxWidth: 460, marginBottom: 12 }}>
+        <button className={!showArchive ? "active" : ""} onClick={() => setShowArchive(false)}>
+          В тестах
+        </button>
+        <button className={showArchive ? "active" : ""} onClick={() => setShowArchive(true)}>
+          🗄 Архив ({archivedCount})
+        </button>
+      </div>
+      {showArchive && (
+        <p className="muted small">Вопросы в архиве не попадают в тесты, но хранятся. «↩ Вернуть» — снова в тесты.</p>
+      )}
+
       <div className="row">
         <select className="select" style={{ maxWidth: 240 }} value={level} onChange={(e) => setLevel(e.target.value)}>
           <option value="">Все уровни</option>
@@ -133,6 +157,7 @@ export default function QuestionsPage() {
           ))}
         </select>
         {!level &&
+          !showArchive &&
           Object.entries(LEVEL_LABEL).map(([v, l]) => {
             const s = status?.levels.find((x) => x.id === v);
             return (
@@ -149,7 +174,7 @@ export default function QuestionsPage() {
         {!questions ? (
           <div className="card"><div className="spinner" /></div>
         ) : questions.length === 0 ? (
-          <div className="card muted center">Вопросов пока нет</div>
+          <div className="card muted center">{showArchive ? "Архив пуст" : "Вопросов пока нет"}</div>
         ) : (
           questions.map((q) =>
             editing === q.id ? (
@@ -195,9 +220,20 @@ export default function QuestionsPage() {
                       🔄 Перегенерировать ИИ
                     </button>
                   )}
-                  <button className="btn btn-danger btn-sm" disabled={busy === q.id} onClick={() => act(q.id, "DELETE")}>
-                    Удалить
-                  </button>
+                  {showArchive ? (
+                    <>
+                      <button className="btn btn-primary btn-sm" disabled={busy === q.id} onClick={() => act(q.id, "RESTORE")}>
+                        ↩ Вернуть в тесты
+                      </button>
+                      <button className="btn btn-danger btn-sm" disabled={busy === q.id} onClick={() => act(q.id, "DELETE")}>
+                        Удалить навсегда
+                      </button>
+                    </>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" disabled={busy === q.id} onClick={() => act(q.id, "ARCHIVE")} title="Убрать из тестов, можно вернуть">
+                      🗄 В архив
+                    </button>
+                  )}
                 </div>
               </div>
             )

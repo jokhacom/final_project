@@ -1,18 +1,21 @@
 import { db } from "./db";
 import { isChoiceType } from "./ai/provider";
-import { examSplit, getQuestionCount } from "./testSettings";
+import { getQuestionCount } from "./testSettings";
 
-// Вопросы по устаревшим версиям документов в тесты не попадают (тот же фильтр, что в /api/attempts/start).
-export const activeQuestionsFilter = { OR: [{ sourceMaterialId: null }, { sourceMaterial: { isActive: true } }] };
+// В тесты попадают вопросы не из архива и не по устаревшим версиям документов
+// (тот же фильтр, что в /api/attempts/start).
+export const activeQuestionsFilter = {
+  archivedAt: null,
+  OR: [{ sourceMaterialId: null }, { sourceMaterial: { isActive: true } }],
+};
 
 const BASE_LEVELS = ["BEGINNER", "MIDDLE", "PROFESSIONAL"] as const;
-// Сколько активных вопросов на каждом уровне и можно ли уже проходить тест.
-// Тесту нужно N вопросов (настройка, по умолчанию 10; лучше половина с вариантами
-// и половина открытых, но недостающие добираются другим видом).
+// Сколько активных вопросов на каждом уровне. Тест открыт, как только есть хотя бы
+// один вопрос: в нём будет min(N, сколько есть) вопросов, где N — настройка
+// «вопросов в тесте» (по умолчанию 10).
 export async function levelReadiness() {
   const n = await getQuestionCount();
   const half = Math.floor(n / 2);
-  const examNeeds = examSplit(n);
   const rows = await db.question.groupBy({
     by: ["level", "type"],
     where: activeQuestionsFilter,
@@ -23,7 +26,8 @@ export async function levelReadiness() {
     const mine = rows.filter((r) => r.level === level);
     const choice = mine.filter((r) => isChoiceType(r.type)).reduce((s, r) => s + r._count._all, 0);
     const open = mine.filter((r) => !isChoiceType(r.type)).reduce((s, r) => s + r._count._all, 0);
-    return { id: level, choice, open, total: choice + open, ready: choice + open >= n, balanced: choice >= half && open >= half, needed: n };
+    const total = choice + open;
+    return { id: level, choice, open, total, ready: total > 0, full: total >= n, inTest: Math.min(total, n), balanced: choice >= half && open >= half, needed: n };
   });
 
   const exam = {
@@ -31,7 +35,9 @@ export async function levelReadiness() {
     choice: levels.reduce((s, l) => s + l.choice, 0),
     open: levels.reduce((s, l) => s + l.open, 0),
     total: levels.reduce((s, l) => s + l.total, 0),
-    ready: levels.every((l) => l.total >= examNeeds[l.id]),
+    ready: levels.some((l) => l.total > 0),
+    full: levels.reduce((s, l) => s + l.total, 0) >= n,
+    inTest: Math.min(levels.reduce((s, l) => s + l.total, 0), n),
     needed: n,
     balanced: levels.every((l) => l.balanced),
   };

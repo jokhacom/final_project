@@ -16,6 +16,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!existing) return NextResponse.json({ error: "Вопрос не найден" }, { status: 404 });
 
   const body = await req.json();
+
+  // Архив: { archived: true } — убрать из тестов, { archived: false } — вернуть.
+  if (typeof body.archived === "boolean") {
+    const question = await db.question.update({ where: { id }, data: { archivedAt: body.archived ? new Date() : null } });
+    return NextResponse.json({ question });
+  }
+
   const merged = {
     type: body.type ?? existing.type,
     level: body.level ?? existing.level,
