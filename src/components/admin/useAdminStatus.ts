@@ -9,7 +9,7 @@ export type AdminStatus = {
   materials: number;
   pendingReviews: number;
   levels: LevelStatus[];
-  ai: { provider: string; configured: boolean; keyEnv: string; gradingMode: "ai" | "keyword" };
+  ai: { provider: string; configured: boolean; chain: string[]; keyEnv: string; gradingMode: "ai" | "keyword" };
   email: boolean;
 };
 

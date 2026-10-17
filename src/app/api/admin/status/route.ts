@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { levelReadiness } from "@/lib/readiness";
-import { AI_KEY_ENV, features } from "@/lib/config/features";
+import { AI_KEY_ENV, PROVIDER_LABEL, features } from "@/lib/config/features";
+import { ANTHROPIC_MODEL } from "@/lib/ai/anthropic";
+import { GEMINI_MODEL } from "@/lib/ai/gemini";
 import { SUPERADMIN_USERNAME } from "@/lib/auth";
 import { CHOICE_TYPES } from "@/lib/ai/provider";
 
@@ -30,6 +32,10 @@ export async function GET() {
     ai: {
       provider: features.AI_PROVIDER,
       configured: features.AI_CONFIGURED,
+      // Например: ["Gemini (gemini-2.5-flash)", "Claude (claude-haiku-5-5)"] — первый основной, остальные запасные.
+      chain: features.AI_CHAIN.map((p) =>
+        p === "anthropic" ? `${PROVIDER_LABEL[p]} (${ANTHROPIC_MODEL})` : p === "gemini" ? `${PROVIDER_LABEL[p]} (${GEMINI_MODEL})` : PROVIDER_LABEL[p]
+      ),
       keyEnv: AI_KEY_ENV[features.AI_PROVIDER],
       gradingMode: features.GRADING_MODE,
     },

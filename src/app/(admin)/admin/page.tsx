@@ -95,7 +95,7 @@ export default function AdminHome() {
           ok: status.ai.configured,
           optional: true,
           label: status.ai.configured
-            ? `ИИ подключён (${status.ai.provider}), проверка ответов: ${status.ai.gradingMode === "ai" ? "через ИИ" : "по ключевым словам"}`
+            ? `ИИ подключён: ${status.ai.chain[0]}${status.ai.chain.length > 1 ? `, запасной — ${status.ai.chain.slice(1).join(", ")}` : ""}. Проверка ответов: ${status.ai.gradingMode === "ai" ? "через ИИ" : "по ключевым словам"}`
             : `ИИ не подключён — добавьте ${status.ai.keyEnv} в Vercel (сейчас проверка по ключевым словам)`,
         },
         {
