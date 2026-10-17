@@ -55,21 +55,25 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const question = await db.question.findUnique({
     where: { id },
-    include: { sourceMaterial: true, rule: true },
+    include: { sourceMaterial: true, rule: true, topic: { include: { rules: true } } },
   });
   if (!question) return NextResponse.json({ error: "Вопрос не найден" }, { status: 404 });
-  if (!question.sourceMaterial?.content) {
+  if (!question.topic && !question.sourceMaterial?.content) {
     return NextResponse.json({ error: "Нет текста материала для перегенерации" }, { status: 422 });
   }
 
   let generated;
   try {
-    [generated] = await aiProvider.generateQuestions(
-      truncateForAI(question.sourceMaterial.content),
-      question.level,
-      1,
-      question.rule?.text
-    );
+    // По теме — из её правил (или одного правила, если вопрос к нему привязан); иначе — по тексту документа.
+    const toRule = (r: { type: any; text: string; sourceQuote: string | null }) => ({ type: r.type, text: r.text, sourceQuote: r.sourceQuote ?? undefined });
+    [generated] = question.topic
+      ? await aiProvider.generateQuestionsForTopic(
+          question.topic.name,
+          (question.rule ? [question.rule] : question.topic.rules).map(toRule),
+          question.level,
+          1
+        )
+      : await aiProvider.generateQuestions(truncateForAI(question.sourceMaterial!.content!), question.level, 1, question.rule?.text);
   } catch (e) {
     return NextResponse.json({ error: "ИИ не смог создать вопрос: " + String(e instanceof Error ? e.message : e) }, { status: 502 });
   }

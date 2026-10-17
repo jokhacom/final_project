@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     where: { materialId: id },
     include: {
       rules: { include: { questions: { select: { id: true, text: true, type: true } } } },
-      questions: { select: { id: true, text: true, type: true } },
+      questions: { select: { id: true, text: true, type: true, level: true } },
     },
     orderBy: { createdAt: "asc" },
   });

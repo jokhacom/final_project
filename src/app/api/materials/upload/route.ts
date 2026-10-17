@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { db } from "@/lib/db";
 import { extractText } from "@/lib/parsing/extractText";
+import { CHUNK_CHARS } from "@/lib/parsing/chunks";
 import { requireAdmin, requireSuperadmin } from "@/lib/session";
 
 // Принимает файл (PDF/DOCX/TXT), сразу извлекает текст и пишет запись Material
@@ -74,9 +75,28 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const admin = await requireAdmin();
   if (admin instanceof NextResponse) return admin;
-  const materials = await db.material.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { questions: true } } },
+  // Текст документа (у книг — мегабайты) в список не отдаём, только его длину и число частей для ИИ.
+  const [materials, lengths] = await Promise.all([
+    db.material.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        status: true,
+        version: true,
+        isActive: true,
+        createdAt: true,
+        _count: { select: { questions: true, topics: true } },
+      },
+    }),
+    db.$queryRaw<{ id: string; chars: number }[]>`SELECT id, COALESCE(length(content), 0)::int AS chars FROM "Material"`,
+  ]);
+  const charsById = new Map(lengths.map((l) => [l.id, Number(l.chars)]));
+  return NextResponse.json({
+    materials: materials.map((m) => {
+      const chars = charsById.get(m.id) ?? 0;
+      return { ...m, chars, chunks: Math.max(1, Math.ceil(chars / CHUNK_CHARS)) };
+    }),
   });
-  return NextResponse.json({ materials });
 }
