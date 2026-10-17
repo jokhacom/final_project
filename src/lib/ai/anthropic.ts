@@ -8,14 +8,16 @@ const SUPPORTS_FALLBACKS = /^claude-(opus|sonnet|fable)-/.test(ANTHROPIC_MODEL);
 
 let client: Anthropic | null = null;
 
-export const anthropicComplete: Complete = async (prompt, maxTokens) => {
+export const anthropicComplete: Complete = async (prompt, maxTokens, opts) => {
   client ??= new Anthropic(); // ключ берётся из ANTHROPIC_API_KEY
   // «Размышления» модели входят в max_tokens, поэтому даём запас, чтобы ответ не обрезался.
   // Стриминг + finalMessage — чтобы длинные ответы (разбор документа) не упирались в таймаут.
+  // fast — меньше «размышлений» (effort low): быстрее и укладывается в 60 с функции Vercel.
   const params = {
     model: ANTHROPIC_MODEL,
-    max_tokens: Math.max(maxTokens, 8000),
+    max_tokens: Math.max(maxTokens * 2, 16000),
     messages: [{ role: "user" as const, content: prompt }],
+    ...(opts?.fast ? { output_config: { effort: "low" as const } } : {}),
   };
   const message: { stop_reason: string | null; content: { type: string; text?: string }[] } = SUPPORTS_FALLBACKS
     ? await client.beta.messages.stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }).finalMessage()

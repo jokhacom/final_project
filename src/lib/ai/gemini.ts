@@ -3,7 +3,11 @@ import type { Complete } from "./prompts";
 // Бесплатный вариант: Google Gemini API (ключ в Google AI Studio, есть бесплатный лимит).
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-export const geminiComplete: Complete = async (prompt, maxTokens) => {
+// У моделей «flash» размышления можно выключить — для разбора документа и создания
+// вопросов это заметно быстрее и не съедает лимит вывода.
+const CAN_DISABLE_THINKING = /flash/.test(GEMINI_MODEL);
+
+export const geminiComplete: Complete = async (prompt, maxTokens, opts) => {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("Не задан GEMINI_API_KEY");
 
@@ -13,7 +17,11 @@ export const geminiComplete: Complete = async (prompt, maxTokens) => {
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       // «Размышления» модели входят в лимит вывода — даём запас, чтобы JSON не обрезался.
-      generationConfig: { maxOutputTokens: Math.max(maxTokens, 8192), responseMimeType: "application/json" },
+      generationConfig: {
+        maxOutputTokens: Math.max(maxTokens * 2, 16384),
+        responseMimeType: "application/json",
+        ...(opts?.fast && CAN_DISABLE_THINKING ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+      },
     }),
   });
   const data = await res.json().catch(() => ({}));
