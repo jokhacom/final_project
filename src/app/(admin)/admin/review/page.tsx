@@ -119,7 +119,7 @@ function ReviewCard({ item, onSaved }: { item: Item; onSaved: () => void }) {
           ✅ Верно
         </button>
         <button className={`btn btn-sm ${!isCorrect ? "btn-danger" : "btn-ghost"}`} onClick={() => setIsCorrect(false)}>
-          ❌ Неверно (−5 🍬)
+          ❌ Неверно
         </button>
         <label className="row small" style={{ gap: 6 }}>
           Орфогр.

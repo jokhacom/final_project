@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { LEVELS } from "@/lib/levels";
+import { formatPenalty } from "@/lib/scoring";
 
 export default function LevelsPage() {
   const { data: session } = useSession();
@@ -62,7 +63,9 @@ export default function LevelsPage() {
       <div className="card mt-lg">
         <h3>Как считаются 🍬</h3>
         <ul className="muted small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
-          <li>Старт — 100 🍬. Неверный ответ — −5, орфографическая ошибка — −1, грамматическая — −1.</li>
+          <li>
+            Старт — 100 🍬. Неверный ответ — −{formatPenalty(count)}, орфографическая ошибка — −1, грамматическая — −1.
+          </li>
           <li>Вставлять текст в открытые ответы нельзя — пишите своими словами.</li>
           <li>Больше 90 🍬 — сертификат. 95+ на уровне Professional — достижение «Эксперт ГЦО» 👑.</li>
         </ul>

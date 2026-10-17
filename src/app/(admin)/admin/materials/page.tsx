@@ -61,6 +61,10 @@ async function post(url: string, body: object) {
   return data;
 }
 
+// Большое число вопросов/игр на тему запрашиваем у ИИ порциями по 10.
+const BATCH = 10;
+const batches = (n: number) => Array.from({ length: Math.ceil(n / BATCH) }, (_, i) => Math.min(BATCH, n - i * BATCH));
+
 // Один шаг с повтором: ИИ иногда отвечает с ошибкой, второй попытки обычно хватает.
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -178,8 +182,10 @@ export default function MaterialsAdminPage() {
       const { topic, level } = jobs[i];
       step({ materialId, stage: `Создаём вопросы: ${i + 1} из ${jobs.length} — «${topic.name}», ${level.label}`, done: i, total: jobs.length });
       try {
-        const r = await withRetry(() => post("/api/questions/generate", { topicId: topic.id, level: level.id, count: perTopic }));
-        created += r.questions.length;
+        for (const count of batches(perTopic)) {
+          const r = await withRetry(() => post("/api/questions/generate", { topicId: topic.id, level: level.id, count }));
+          created += r.questions.length;
+        }
       } catch (e) {
         failed++;
         step({ materialId }, `⚠️ «${topic.name}» (${level.label}) пропущено: ${e instanceof Error ? e.message : e}`);
@@ -201,8 +207,10 @@ export default function MaterialsAdminPage() {
       const t = todo[i];
       step({ materialId, stage: `Создаём игры: ${i + 1} из ${todo.length} — «${t.name}»`, done: i, total: todo.length });
       try {
-        const r = await withRetry(() => post("/api/learning/games/generate", { topicId: t.id, count: gamesPerTopic }));
-        created += r.created;
+        for (const count of batches(gamesPerTopic)) {
+          const r = await withRetry(() => post("/api/learning/games/generate", { topicId: t.id, count }));
+          created += r.created;
+        }
       } catch (e) {
         failed++;
         step({ materialId }, `⚠️ «${t.name}» пропущено: ${e instanceof Error ? e.message : e}`);
@@ -307,8 +315,12 @@ export default function MaterialsAdminPage() {
 
   const generateOne = (materialId: string, topicId: string, level: string, key: string) =>
     run(key, async () => {
-      const r = await post("/api/questions/generate", { topicId, level, count: perTopic });
-      setNotice(`Создано вопросов: ${r.questions.length}. Проверить и поправить их можно в разделе «Вопросы».`);
+      let created = 0;
+      for (const count of batches(perTopic)) {
+        const r = await post("/api/questions/generate", { topicId, level, count });
+        created += r.questions.length;
+      }
+      setNotice(`Создано вопросов: ${created}. Проверить и поправить их можно в разделе «Вопросы».`);
       await loadTopics(materialId);
     });
 
@@ -355,9 +367,8 @@ export default function MaterialsAdminPage() {
                   style={{ width: 70, padding: "6px 8px" }}
                   type="number"
                   min={1}
-                  max={10}
                   value={perTopic}
-                  onChange={(e) => setPerTopic(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
+                  onChange={(e) => setPerTopic(Math.max(1, Math.round(Number(e.target.value)) || 1))}
                 />
                 <span className="muted">(для книги с десятками тем хватит 2–4)</span>
               </label>
@@ -368,9 +379,8 @@ export default function MaterialsAdminPage() {
                   style={{ width: 70, padding: "6px 8px" }}
                   type="number"
                   min={1}
-                  max={10}
                   value={gamesPerTopic}
-                  onChange={(e) => setGamesPerTopic(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
+                  onChange={(e) => setGamesPerTopic(Math.max(1, Math.round(Number(e.target.value)) || 1))}
                 />
               </label>
 

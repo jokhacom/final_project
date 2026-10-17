@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
   const { topicId, count } = await req.json();
   const topic = await db.topic.findUnique({ where: { id: topicId }, include: { rules: true } });
   if (!topic) return NextResponse.json({ error: "Тема не найдена" }, { status: 404 });
+  // Один запрос — до 10 элементов каждой игры; больше браузер запрашивает порциями.
   const n = Math.min(Math.max(Math.round(Number(count) || 3), 1), 10);
 
   let generated;
