@@ -1,7 +1,8 @@
 // Большие документы (Редполитика, книги) ИИ читает по частям: каждая часть
 // разбирается отдельным запросом, а темы из разных частей потом объединяются.
 // Режем по абзацам, чтобы не разрывать правило посередине.
-export const CHUNK_CHARS = 12000;
+// ~8000 символов ≈ 4 страницы: ответ ИИ по такой части короткий и успевает за 60 с.
+export const CHUNK_CHARS = 8000;
 
 export function splitIntoChunks(text: string, size = CHUNK_CHARS): string[] {
   const paragraphs = text.replace(/\r/g, "").split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);

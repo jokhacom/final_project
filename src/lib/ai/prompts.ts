@@ -3,7 +3,9 @@ import type { AIProvider, ExtractedRule, GeneratedGameItem, GeneratedQuestion, L
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
 // поэтому Claude, Gemini и OpenAI задают вопросы и проверяют ответы одинаково.
-export type Complete = (prompt: string, maxTokens: number) => Promise<string>;
+// fast — для разбора документа и создания вопросов/игр: ИИ меньше «размышляет»,
+// отвечает быстрее и укладывается в лимит времени функции Vercel (60 с).
+export type Complete = (prompt: string, maxTokens: number, opts?: { fast?: boolean }) => Promise<string>;
 
 const LEVEL_LABEL: Record<Level, string> = {
   BEGINNER: "Новичок — базовые правила, простые формулировки",
@@ -30,11 +32,49 @@ export function parseJson<T>(raw: string): T {
   const cleaned = raw.replace(/```json|```/g, "").trim();
   try {
     return JSON.parse(cleaned);
+  } catch {}
+  const start = cleaned.search(/[[{]/);
+  const end = Math.max(cleaned.lastIndexOf("]"), cleaned.lastIndexOf("}"));
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch {}
+  }
+  // Ответ обрезан на середине (кончился лимит вывода) — забираем все элементы
+  // массива, которые успели прийти целиком.
+  const salvaged = salvageArray(cleaned.slice(Math.max(start, 0)));
+  if (salvaged) return salvaged as T;
+  throw new Error("ИИ вернул неполный ответ — попробуйте ещё раз");
+}
+
+// Из начала JSON-массива "[{...},{...},{..." оставляет только законченные объекты верхнего уровня.
+function salvageArray(text: string): unknown[] | null {
+  if (!text.startsWith("[")) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let lastComplete = -1;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === "\\") escaped = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === "{" || c === "[") depth++;
+    else if (c === "}" || c === "]") {
+      depth--;
+      if (depth === 1 && c === "}") lastComplete = i;
+    }
+  }
+  if (lastComplete < 0) return null;
+  try {
+    const list = JSON.parse(text.slice(0, lastComplete + 1) + "]");
+    return Array.isArray(list) && list.length ? list : null;
   } catch {
-    const start = cleaned.search(/[[{]/);
-    const end = Math.max(cleaned.lastIndexOf("]"), cleaned.lastIndexOf("}"));
-    if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
-    throw new Error("ИИ вернул ответ не в формате JSON");
+    return null;
   }
 }
 
@@ -65,13 +105,13 @@ ${materialText}
 - EXAMPLE_GOOD (пример правильного общения)
 - EXAMPLE_BAD (пример неправильного общения)
 
-Правила формулируй понятно для сотрудника, кратко. Добавь короткую цитату из документа (sourceQuote).
+Правила формулируй понятно для сотрудника, кратко (одно предложение). Выпиши самые важные — не больше 8 тем и 25 правил на фрагмент. Добавь короткую цитату из документа (sourceQuote).
 Название темы — короткое и общее (2–4 слова, например «Обращение к клиенту», «Задолженность и оплата»), чтобы одинаковые темы из разных частей документа совпадали по названию.
 НЕ придумывай правила, которых нет в тексте. Если во фрагменте нет правил (оглавление, титульный лист), верни пустой массив [].
 
 Ответь строго JSON-массивом без markdown:
 [{"name":"Название темы","description":"Кратко о теме","rules":[{"type":"REQUIRED","text":"...","sourceQuote":"..."}]}]`;
-      return parseJson(await complete(prompt, 8000));
+      return parseJson(await complete(prompt, 12000, { fast: true }));
     },
 
     async generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level, count) {
@@ -86,7 +126,7 @@ ${rulesText}
 
 Создай ${count} заданий, каждое проверяет одно из перечисленных правил.
 ${QUESTION_FORMAT}`;
-      return normalizeQuestions(parseJson(await complete(prompt, 8000)));
+      return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })));
     },
 
     async generateQuestions(materialText, level, count, ruleContext) {
@@ -104,7 +144,7 @@ ${materialText}
 
 Создай ${count} заданий, основанных ТОЛЬКО на содержании документа.
 ${QUESTION_FORMAT}`;
-      return normalizeQuestions(parseJson(await complete(prompt, 8000)));
+      return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })));
     },
 
     async generateGameItems(topicName, rules, count) {
@@ -121,7 +161,7 @@ ${rulesText}
 Ответь строго JSON-массивом без markdown:
 [{"kind":"TRUE_FALSE","prompt":"...","isCorrect":false,"explanation":"..."},
  {"kind":"FLASHCARD","prompt":"...","answer":"...","explanation":"..."}]`;
-      const list = parseJson<GeneratedGameItem[]>(await complete(prompt, 6000));
+      const list = parseJson<GeneratedGameItem[]>(await complete(prompt, 6000, { fast: true }));
       return (Array.isArray(list) ? list : []).filter(
         (g) =>
           g?.prompt &&
