@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { levelInfo } from "@/lib/levels";
+import { useAdminStatus } from "@/components/admin/useAdminStatus";
 
 type User = { id: string; name: string; username: string; role: string; leaderboard: { testsDone: number; bestCandy: number } | null };
 
@@ -16,6 +19,7 @@ export default function AdminHome() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [dailyQuiz, setDailyQuiz] = useState<boolean | null>(null);
+  const status = useAdminStatus();
 
   useEffect(() => {
     fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
@@ -36,8 +40,49 @@ export default function AdminHome() {
     if (res.ok) setDailyQuiz(next);
   }
 
+  const checks = status
+    ? [
+        { ok: status.superadmin, label: "Суперадминистратор создан" },
+        ...status.levels.map((l) => ({
+          ok: l.ready,
+          label: `${levelInfo(l.id).label}: ${l.total} вопросов (${l.choice} с вариантами, ${l.open} открытых)`,
+          hint: l.ready ? (l.balanced ? undefined : "лучше минимум 5 + 5") : l.id === "EXAM" ? "нужно 3 / 3 / 4 вопроса по уровням" : "нужно минимум 10",
+        })),
+        {
+          ok: status.ai.configured,
+          optional: true,
+          label: status.ai.configured
+            ? `ИИ подключён (${status.ai.provider}), проверка ответов: ${status.ai.gradingMode === "ai" ? "через ИИ" : "по ключевым словам"}`
+            : `ИИ не подключён — добавьте ${status.ai.keyEnv} в Vercel (сейчас проверка по ключевым словам)`,
+        },
+        { ok: status.email, optional: true, label: status.email ? "Обратная связь дублируется на почту" : "Почта для обратной связи не настроена (обращения видны в админке)" },
+      ]
+    : [];
+
   return (
     <div className="stack">
+      {status && (
+        <div className="card">
+          <div className="row between">
+            <h2 style={{ margin: 0 }}>🚀 Готовность к запуску</h2>
+            <Link href="/admin/questions" className="btn btn-ghost btn-sm">
+              Добавить вопросы →
+            </Link>
+          </div>
+          <div className="stack mt" style={{ gap: 8 }}>
+            {checks.map((c, i) => (
+              <div key={i} className="row small" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
+                <span>{c.ok ? "✅" : (c as any).optional ? "⚪" : "❌"}</span>
+                <span>
+                  {c.label}
+                  {(c as any).hint && <span className="muted"> — {(c as any).hint}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <h2>📊 Выгрузка результатов в Excel</h2>
         <div className="grid grid-4">

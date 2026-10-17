@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
 import { requireSuperadmin } from "@/lib/session";
 import { aiProvider } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
@@ -13,6 +14,7 @@ import { truncateForAI } from "@/lib/parsing/extractText";
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireSuperadmin();
   if (admin instanceof NextResponse) return admin;
+  if (!features.AI_CONFIGURED) return NextResponse.json({ error: AI_NOT_CONFIGURED_MESSAGE }, { status: 503 });
   const { id } = await params;
   const material = await db.material.findUnique({ where: { id } });
   if (!material) {

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel, QUESTIONS_PER_TEST, TEST_DURATION_SEC } from "@/lib/levels";
+import { activeQuestionsFilter } from "@/lib/readiness";
 
 function sample<T>(arr: T[], n: number): T[] {
   const copy = [...arr];
@@ -36,8 +37,7 @@ export async function POST(req: NextRequest) {
   const { level } = await req.json();
   if (!isLevel(level)) return NextResponse.json({ error: "Неизвестный уровень" }, { status: 400 });
 
-  // Вопросы по устаревшим версиям документов в новые тесты не попадают.
-  const activeOnly = { OR: [{ sourceMaterialId: null }, { sourceMaterial: { isActive: true } }] };
+  const activeOnly = activeQuestionsFilter;
   const select = { id: true, type: true, level: true };
 
   let picked: Q[];
