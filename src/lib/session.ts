@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "./auth";
+import { db } from "./db";
 
 export type Role = "EMPLOYEE" | "ADMIN" | "SUPERADMIN";
 export interface SessionUser {
@@ -11,11 +12,14 @@ export interface SessionUser {
 
 // Кто делает запрос — берём только из сессии, никогда из тела запроса,
 // иначе любой сотрудник мог бы проходить тесты или смотреть кабинет за другого.
+// Роль и само существование пользователя проверяем по базе: так удалённый
+// сотрудник сразу теряет доступ, а смена роли действует без повторного входа.
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authOptions);
-  const user = session?.user as any;
-  if (!user?.id) return null;
-  return { id: user.id, name: user.name ?? "", role: user.role ?? "EMPLOYEE" };
+  const id = (session?.user as any)?.id;
+  if (!id) return null;
+  const user = await db.user.findUnique({ where: { id }, select: { id: true, name: true, role: true } });
+  return user;
 }
 
 export const isAdmin = (u: SessionUser) => u.role === "ADMIN" || u.role === "SUPERADMIN";

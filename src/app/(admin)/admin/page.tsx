@@ -22,9 +22,34 @@ export default function AdminHome() {
   const [minutes, setMinutes] = useState("15");
   const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
   const status = useAdminStatus();
+  const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const loadUsers = () => fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
+
+  async function userAction(u: User, method: "PATCH" | "DELETE", body?: object, okText?: string) {
+    setUserMsg(null);
+    const res = await fetch(`/api/admin/users/${u.id}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    setUserMsg(res.ok ? { ok: true, text: okText ?? "Готово" } : { ok: false, text: data.error ?? "Ошибка" });
+    loadUsers();
+  }
+
+  function removeUser(u: User) {
+    if (!confirm(`Удалить ${u.name} (@${u.username})? Его результаты и обращения тоже удалятся. Отменить нельзя.`)) return;
+    userAction(u, "DELETE", undefined, `${u.name} удалён`);
+  }
+
+  function resetPassword(u: User) {
+    const password = prompt(`Новый пароль для ${u.name} (не короче 6 символов):`);
+    if (!password) return;
+    userAction(u, "PATCH", { password }, `Пароль для ${u.name} изменён — сообщите его сотруднику`);
+  }
 
   useEffect(() => {
-    fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
+    loadUsers();
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => {
@@ -133,9 +158,10 @@ export default function AdminHome() {
 
       <div className="card">
         <h2>👥 Сотрудники ({users.length})</h2>
-        <p className="muted small">
-          Роль администратора выдаётся через базу данных: <code>UPDATE &quot;User&quot; SET role = &apos;ADMIN&apos; WHERE username = &apos;...&apos;</code>
-        </p>
+        {isSuper && (
+          <p className="muted small">Администратор видит админ-панель: вопросы, аналитику, выгрузку и обратную связь. Материалы и настройки — только у вас.</p>
+        )}
+        {userMsg && <div className={`alert ${userMsg.ok ? "alert-success" : "alert-error"}`} style={{ marginBottom: 12 }}>{userMsg.text}</div>}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -145,6 +171,7 @@ export default function AdminHome() {
                 <th>Роль</th>
                 <th>Тестов</th>
                 <th>Лучший</th>
+                {isSuper && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -152,9 +179,37 @@ export default function AdminHome() {
                 <tr key={u.id}>
                   <td>{u.name}</td>
                   <td className="muted">@{u.username}</td>
-                  <td>{ROLE_LABEL[u.role] ?? u.role}</td>
+                  <td>
+                    {isSuper && u.role !== "SUPERADMIN" ? (
+                      <select
+                        className="select"
+                        style={{ padding: "6px 10px", width: "auto" }}
+                        value={u.role}
+                        onChange={(e) => userAction(u, "PATCH", { role: e.target.value }, `Роль ${u.name} изменена`)}
+                      >
+                        <option value="EMPLOYEE">Сотрудник</option>
+                        <option value="ADMIN">Администратор</option>
+                      </select>
+                    ) : (
+                      ROLE_LABEL[u.role] ?? u.role
+                    )}
+                  </td>
                   <td>{u.leaderboard?.testsDone ?? 0}</td>
                   <td>{u.leaderboard ? `${u.leaderboard.bestCandy} 🍬` : "—"}</td>
+                  {isSuper && (
+                    <td>
+                      {u.role !== "SUPERADMIN" && (
+                        <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u)} title="Сбросить пароль">
+                            🔑
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => removeUser(u)} title="Удалить">
+                            Удалить
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
