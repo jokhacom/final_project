@@ -1,8 +1,8 @@
-import { createProvider } from "./prompts";
+import type { Complete } from "./prompts";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-export const openaiProvider = createProvider(async (prompt, maxTokens) => {
+export const openaiComplete: Complete = async (prompt, maxTokens) => {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Не задан OPENAI_API_KEY");
 
@@ -18,4 +18,4 @@ export const openaiProvider = createProvider(async (prompt, maxTokens) => {
   const data = await res.json();
   if (!res.ok) throw new Error(`OpenAI: ${data?.error?.message ?? res.status}`);
   return data.choices?.[0]?.message?.content ?? "";
-});
+};
