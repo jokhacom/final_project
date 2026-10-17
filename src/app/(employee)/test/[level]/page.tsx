@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ProtectedTextarea } from "@/components/ProtectedTextarea";
 import { isLevel, levelInfo } from "@/lib/levels";
 
-type Question = { id: string; type: string; text: string; options: string[] | null };
+type Question = { id: string; type: string; text: string; options: string[] | null; image: string | null };
 
 const CHOICE = ["MULTIPLE_CHOICE", "BEST_RESPONSE"];
 const TYPE_HINT: Record<string, string> = {
@@ -196,6 +196,12 @@ export default function TestPage() {
               Вопрос {index + 1} из {questions.length} · {TYPE_HINT[q.type] ?? ""}
             </div>
             <div className="question-text">{q.text}</div>
+            {q.image && (
+              <a href={q.image} target="_blank" rel="noreferrer" title="Открыть крупно">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={q.image} alt="Скриншот к вопросу" className="question-image" />
+              </a>
+            )}
 
             {isChoice ? (
               <div className="stack">

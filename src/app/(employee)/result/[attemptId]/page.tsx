@@ -112,6 +112,8 @@ function ReviewCard({ item: r }: { item: ReviewItem }) {
         </span>
       </div>
       <p style={{ fontWeight: 800, whiteSpace: "pre-wrap", margin: "8px 0 12px" }}>{r.text}</p>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {r.image && <img src={r.image} alt="Скриншот к вопросу" className="question-image" style={{ marginBottom: 12 }} />}
 
       {r.options ? (
         <div className="stack" style={{ gap: 6 }}>
@@ -140,7 +142,7 @@ function ReviewCard({ item: r }: { item: ReviewItem }) {
           </div>
           {r.correctAnswer && (
             <div>
-              <div className="small muted">Ключевые моменты правильного ответа</div>
+              <div className="small muted">{r.correctAnswerIsModel ? "Эталонный ответ" : "Ключевые моменты правильного ответа"}</div>
               <div className="answer-box ok">✅ {r.correctAnswer}</div>
             </div>
           )}

@@ -144,6 +144,8 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700;
 /* Карточки уровней */
 .level-card { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--text) !important; cursor: pointer; transition: transform 0.15s ease; }
 .level-card:hover { transform: translateY(-4px); }
+.level-card.disabled { cursor: default; opacity: 0.55; filter: grayscale(0.6); }
+.level-card.disabled:hover { transform: none; }
 .level-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--level); }
 .level-card .level-title { font-size: 20px; font-weight: 900; color: var(--level); }
 .level-meta { font-size: 13px; font-weight: 700; color: var(--muted); }
@@ -156,6 +158,7 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700;
 .timer { font-variant-numeric: tabular-nums; font-weight: 900; font-size: 18px; padding: 6px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
 .timer.danger { color: #fff; background: var(--danger); border-color: var(--danger); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { transform: scale(1.06); } }
+.question-image { display: block; max-width: 100%; max-height: 420px; border-radius: 14px; border: 1px solid var(--border); object-fit: contain; background: #fff; }
 .question-text { font-size: 19px; font-weight: 800; line-height: 1.5; white-space: pre-wrap; }
 .option {
   display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left;

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useAdminStatus } from "@/components/admin/useAdminStatus";
+import { AiOffNotice } from "@/components/admin/AiOffNotice";
 
 type Material = {
   id: string;
@@ -43,6 +45,8 @@ const LEVELS = [
 export default function MaterialsAdminPage() {
   const { data: session } = useSession();
   const isSuper = (session?.user as any)?.role === "SUPERADMIN";
+  const status = useAdminStatus();
+  const aiOn = !!status?.ai.configured;
   const [materials, setMaterials] = useState<Material[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -96,7 +100,7 @@ export default function MaterialsAdminPage() {
       setFile(null);
       setTitle("");
       setReplaceId("");
-      setNotice("Документ загружен. Теперь нажмите «Анализировать».");
+      setNotice(aiOn ? "Документ загружен. Теперь нажмите «Анализировать»." : "Документ загружен. Анализ станет доступен после подключения ИИ.");
       await loadMaterials();
     });
 
@@ -135,9 +139,11 @@ export default function MaterialsAdminPage() {
         <h1>База знаний — материалы</h1>
         <p className="muted small">
           Загрузите PDF/DOCX/TXT (Редполитика, Tone of Voice и т.д.) → «Анализировать»: ИИ выделит темы и правила → по каждой теме сгенерируйте
-          вопросы нужного уровня.
+          вопросы нужного уровня. Загрузить документы можно уже сейчас — анализ запустите, когда подключите ИИ.
         </p>
       </div>
+
+      {status && <AiOffNotice ai={status.ai} />}
 
       {isSuper && (
         <div className="card stack">
@@ -183,7 +189,7 @@ export default function MaterialsAdminPage() {
               </div>
             </div>
             <div className="row">
-              {isSuper && m.isActive && (
+              {isSuper && m.isActive && aiOn && (
                 <button className="btn btn-ghost btn-sm" onClick={() => handleAnalyze(m.id)} disabled={!!busy || m.status === "ANALYZING"}>
                   {busy === `analyze:${m.id}` ? "ИИ анализирует..." : m.status === "PROCESSED" ? "Переанализировать" : "Анализировать"}
                 </button>
@@ -196,7 +202,7 @@ export default function MaterialsAdminPage() {
             </div>
           </div>
 
-          {isSuper && m.isActive && m.status !== "PROCESSED" && m.status !== "ANALYZING" && (
+          {isSuper && aiOn && m.isActive && m.status !== "PROCESSED" && m.status !== "ANALYZING" && (
             <div className="row mt small">
               <span className="muted">Или сразу вопросы по всему документу:</span>
               {LEVELS.map((l) => (
@@ -224,7 +230,7 @@ export default function MaterialsAdminPage() {
                       </div>
                     ))}
                   </div>
-                  {isSuper && m.isActive && (
+                  {isSuper && aiOn && m.isActive && (
                     <div className="row" style={{ marginTop: 8 }}>
                       {LEVELS.map((l) => (
                         <button

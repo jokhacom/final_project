@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LEVEL_LABEL, QuestionForm, TYPE_LABEL, toDraft } from "@/components/admin/QuestionForm";
+import { useAdminStatus } from "@/components/admin/useAdminStatus";
 
 type Q = {
   id: string;
@@ -12,7 +13,9 @@ type Q = {
   options: string[] | null;
   correctIndex: number | null;
   expectedKeywords: string[] | null;
+  modelAnswer: string | null;
   explanation: string | null;
+  image: string | null;
   sourceMaterial: { title: string; version: number } | null;
   topic: { name: string } | null;
 };
@@ -24,11 +27,35 @@ export default function QuestionsPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const status = useAdminStatus([reload]);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ ok?: string; error?: string; errors?: string[] } | null>(null);
 
   async function load() {
     const res = await fetch(`/api/questions/manual${level ? `?level=${level}` : ""}`);
     const data = await res.json();
     setQuestions(data.questions ?? []);
+    setReload((n) => n + 1);
+  }
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImporting(true);
+    setImportResult(null);
+    const form = new FormData();
+    form.append("file", importFile);
+    const res = await fetch("/api/questions/import", { method: "POST", body: form });
+    const data = await res.json().catch(() => ({}));
+    setImporting(false);
+    if (!res.ok) {
+      setImportResult({ error: data.error ?? "Ошибка импорта", errors: data.errors });
+      return;
+    }
+    setImportResult({ ok: `Загружено вопросов: ${data.imported}` });
+    setImportFile(null);
+    load();
   }
 
   useEffect(() => {
@@ -64,6 +91,37 @@ export default function QuestionsPage() {
         Для теста нужно минимум 10 вопросов на уровень (5 с вариантами + 5 открытых). Сгенерировать вопросы ИИ можно в разделе «Материалы».
       </p>
 
+      <div className="card stack" style={{ marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>📥 Импорт из Excel</h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          Скачайте шаблон, заполните вопросы по документам (Редполитика, Tone of Voice) и загрузите файл. Можно загружать сколько угодно раз — новые
+          вопросы добавятся к существующим.
+        </p>
+        <div className="row">
+          <a className="btn btn-ghost btn-sm" href="/api/questions/import">
+            ⬇️ Скачать шаблон
+          </a>
+          <input type="file" accept=".xlsx" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
+          <button className="btn btn-primary btn-sm" onClick={handleImport} disabled={!importFile || importing}>
+            {importing ? "Загружаем..." : "Загрузить"}
+          </button>
+        </div>
+        {importResult?.ok && <div className="alert alert-success">{importResult.ok}</div>}
+        {importResult?.error && (
+          <div className="alert alert-error">
+            {importResult.error}
+            {importResult.errors && (
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {importResult.errors.slice(0, 20).map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+                {importResult.errors.length > 20 && <li>…и ещё {importResult.errors.length - 20}</li>}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="row">
         <select className="select" style={{ maxWidth: 240 }} value={level} onChange={(e) => setLevel(e.target.value)}>
           <option value="">Все уровни</option>
@@ -74,11 +132,14 @@ export default function QuestionsPage() {
           ))}
         </select>
         {!level &&
-          Object.entries(LEVEL_LABEL).map(([v, l]) => (
-            <span key={v} className="badge">
-              {l}: {counts[v] ?? 0}
-            </span>
-          ))}
+          Object.entries(LEVEL_LABEL).map(([v, l]) => {
+            const s = status?.levels.find((x) => x.id === v);
+            return (
+              <span key={v} className="badge" title={s ? `${s.choice} с вариантами, ${s.open} открытых` : undefined}>
+                {s ? (s.ready ? "✅" : "❌") : ""} {l}: {counts[v] ?? 0}
+              </span>
+            );
+          })}
       </div>
 
       {error && <div className="alert alert-error mt">{error}</div>}
@@ -107,6 +168,8 @@ export default function QuestionsPage() {
                   )}
                 </div>
                 <p style={{ fontWeight: 700, whiteSpace: "pre-wrap" }}>{q.text}</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {q.image && <img src={q.image} alt="Скриншот" className="question-image" style={{ maxHeight: 180, marginBottom: 8 }} />}
                 {q.options ? (
                   <ol className="small" style={{ margin: 0 }}>
                     {q.options.map((o, i) => (
@@ -116,14 +179,17 @@ export default function QuestionsPage() {
                     ))}
                   </ol>
                 ) : (
-                  <div className="small muted">Ключевые слова: {(q.expectedKeywords ?? []).join(", ")}</div>
+                  <div className="small muted stack" style={{ gap: 4 }}>
+                    {q.modelAnswer && <div>Эталонный ответ: {q.modelAnswer}</div>}
+                    {!!q.expectedKeywords?.length && <div>Ключевые слова: {q.expectedKeywords.join(", ")}</div>}
+                  </div>
                 )}
                 {q.explanation && <div className="small muted mt">💡 {q.explanation}</div>}
                 <div className="row mt">
                   <button className="btn btn-ghost btn-sm" onClick={() => setEditing(q.id)}>
                     ✏️ Изменить
                   </button>
-                  {q.sourceMaterial && (
+                  {q.sourceMaterial && status?.ai.configured && (
                     <button className="btn btn-ghost btn-sm" disabled={busy === q.id} onClick={() => act(q.id, "POST")}>
                       🔄 Перегенерировать ИИ
                     </button>

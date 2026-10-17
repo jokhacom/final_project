@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
-import { isLevel, QUESTIONS_PER_TEST, TEST_DURATION_SEC } from "@/lib/levels";
+import { isLevel, QUESTIONS_PER_TEST } from "@/lib/levels";
+import { getTestMinutes } from "@/lib/testSettings";
+import { activeQuestionsFilter } from "@/lib/readiness";
 
 function sample<T>(arr: T[], n: number): T[] {
   const copy = [...arr];
@@ -36,8 +38,7 @@ export async function POST(req: NextRequest) {
   const { level } = await req.json();
   if (!isLevel(level)) return NextResponse.json({ error: "Неизвестный уровень" }, { status: 400 });
 
-  // Вопросы по устаревшим версиям документов в новые тесты не попадают.
-  const activeOnly = { OR: [{ sourceMaterialId: null }, { sourceMaterial: { isActive: true } }] };
+  const activeOnly = activeQuestionsFilter;
   const select = { id: true, type: true, level: true };
 
   let picked: Q[];
@@ -62,11 +63,12 @@ export async function POST(req: NextRequest) {
   const ordered = [...picked.filter((q) => isChoiceType(q.type)), ...picked.filter((q) => !isChoiceType(q.type))];
   const questionIds = ordered.map((q) => q.id);
 
-  const attempt = await db.testAttempt.create({ data: { userId: user.id, level, candies: 0, questionIds } });
+  const durationSec = (await getTestMinutes()) * 60;
+  const attempt = await db.testAttempt.create({ data: { userId: user.id, level, candies: 0, questionIds, durationSec } });
 
   const full = await db.question.findMany({
     where: { id: { in: questionIds } },
-    select: { id: true, type: true, text: true, options: true },
+    select: { id: true, type: true, text: true, options: true, image: true },
   });
   // Правильный ответ, ключевые слова и пояснение в браузер не отдаём — только после завершения.
   const questions = questionIds.map((id) => full.find((q) => q.id === id)!);
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     attemptId: attempt.id,
     startedAt: attempt.startedAt,
-    durationSec: TEST_DURATION_SEC,
+    durationSec,
     questions,
   });
 }

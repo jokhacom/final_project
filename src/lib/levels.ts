@@ -12,6 +12,5 @@ export const levelInfo = (id: string) => LEVELS.find((l) => l.id === id) ?? LEVE
 export const isLevel = (id: unknown): id is LevelId => LEVELS.some((l) => l.id === id);
 
 export const QUESTIONS_PER_TEST = 10;
-export const TEST_DURATION_SEC = 15 * 60;
 // Запас на сетевые задержки и проверку последнего ответа ИИ.
 export const TEST_GRACE_SEC = 90;

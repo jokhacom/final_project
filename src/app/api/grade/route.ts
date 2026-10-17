@@ -27,6 +27,9 @@ export async function POST(req: NextRequest) {
   const answer = String(answerText ?? "").slice(0, 4000);
   const expectedKeywords = (question.expectedKeywords as string[] | null) ?? [];
   let materialContext = question.sourceMaterial?.content ?? null;
+  if (question.modelAnswer) {
+    materialContext = `[Эталонный ответ, который составил администратор]\n${question.modelAnswer}\n\n` + (materialContext ?? "");
+  }
   if (question.rule) {
     const ruleBlock = `[Конкретное правило, которое проверяет этот вопрос — тип: ${question.rule.type}]\n${question.rule.text}${question.rule.sourceQuote ? `\n(источник: "${question.rule.sourceQuote}")` : ""}\n\n`;
     materialContext = ruleBlock + (materialContext ?? "");
@@ -40,10 +43,10 @@ export async function POST(req: NextRequest) {
       result = await aiProvider.gradeOpenAnswer(question.text, expectedKeywords, answer, materialContext);
     } catch (e) {
       console.error("AI grading failed, falling back to keywords:", e);
-      result = gradeByKeywords(expectedKeywords, answer);
+      result = gradeByKeywords(expectedKeywords, answer, question.modelAnswer);
     }
   } else {
-    result = gradeByKeywords(expectedKeywords, answer);
+    result = gradeByKeywords(expectedKeywords, answer, question.modelAnswer);
   }
 
   await db.answer.create({

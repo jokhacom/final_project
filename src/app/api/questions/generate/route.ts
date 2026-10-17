@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
 import { aiProvider, type GeneratedQuestion } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
 import { isLevel } from "@/lib/levels";
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
   const admin = await requireSuperadmin();
   if (admin instanceof NextResponse) return admin;
 
+  if (!features.AI_CONFIGURED) return NextResponse.json({ error: AI_NOT_CONFIGURED_MESSAGE }, { status: 503 });
   const body = await req.json();
   const { topicId, ruleId, level } = body;
   if (!isLevel(level) || level === "EXAM") {

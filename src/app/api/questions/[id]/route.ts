@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
 import { aiProvider } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
 import { requireAdmin } from "@/lib/session";
@@ -23,6 +24,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     correctIndex: body.correctIndex ?? existing.correctIndex,
     expectedKeywords: body.expectedKeywords ?? existing.expectedKeywords,
     explanation: body.explanation ?? existing.explanation,
+    modelAnswer: body.modelAnswer ?? existing.modelAnswer,
+    image: body.image ?? existing.image, // "" — убрать скриншот
   };
   const checked = validateQuestion(merged);
   if ("error" in checked) return NextResponse.json({ error: checked.error }, { status: 400 });
@@ -46,6 +49,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   if (admin instanceof NextResponse) return admin;
+
+  if (!features.AI_CONFIGURED) return NextResponse.json({ error: AI_NOT_CONFIGURED_MESSAGE }, { status: 503 });
 
   const { id } = await params;
   const question = await db.question.findUnique({
