@@ -10,6 +10,7 @@ export default function LevelsPage() {
   const firstName = session?.user?.name?.split(" ")[0];
   const [ready, setReady] = useState<Record<string, boolean> | null>(null);
   const [minutes, setMinutes] = useState(15);
+  const [count, setCount] = useState(10);
 
   useEffect(() => {
     fetch("/api/levels")
@@ -17,6 +18,7 @@ export default function LevelsPage() {
       .then((d) => {
         setReady(Object.fromEntries((d.levels ?? []).map((l: { id: string; ready: boolean }) => [l.id, l.ready])));
         if (d.minutes) setMinutes(d.minutes);
+        if (d.count) setCount(d.count);
       })
       .catch(() => setReady(null));
   }, []);
@@ -24,7 +26,9 @@ export default function LevelsPage() {
   return (
     <main className="container">
       <h1>Привет{firstName ? `, ${firstName}` : ""}! 👋</h1>
-      <p className="muted">Выберите уровень. Каждая попытка — новый набор вопросов: 5 с вариантами ответа и 5 открытых.</p>
+      <p className="muted">
+        Выберите уровень. Каждая попытка — новый набор вопросов: {Math.ceil(count / 2)} с вариантами ответа и {Math.floor(count / 2)} открытых.
+      </p>
 
       <div className="grid grid-2 mt">
         {LEVELS.map((l) => {
@@ -33,7 +37,7 @@ export default function LevelsPage() {
               <div style={{ fontSize: 34 }}>{l.icon}</div>
               <div className="level-title">{l.label}</div>
               <div className="muted">{l.description}</div>
-              <div className="level-meta">10 вопросов · {minutes} мин · до 100 🍬</div>
+              <div className="level-meta">{count} вопросов · {minutes} мин · до 100 🍬</div>
             </>
           );
           // Пока вопросов для уровня недостаточно — карточка неактивна.

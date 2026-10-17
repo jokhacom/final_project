@@ -11,6 +11,5 @@ export const LEVELS: { id: LevelId; label: string; icon: string; color: string; 
 export const levelInfo = (id: string) => LEVELS.find((l) => l.id === id) ?? LEVELS[0];
 export const isLevel = (id: unknown): id is LevelId => LEVELS.some((l) => l.id === id);
 
-export const QUESTIONS_PER_TEST = 10;
 // Запас на сетевые задержки и проверку последнего ответа ИИ.
 export const TEST_GRACE_SEC = 90;

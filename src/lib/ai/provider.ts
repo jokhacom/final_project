@@ -29,6 +29,15 @@ export interface ExtractedRule {
   sourceQuote?: string; // короткая цитата из документа
 }
 
+// Элемент обучающей игры (см. GameItem в schema.prisma).
+export interface GeneratedGameItem {
+  kind: "TRUE_FALSE" | "FLASHCARD";
+  prompt: string;
+  answer?: string;
+  isCorrect?: boolean;
+  explanation?: string;
+}
+
 export interface ExtractedTopic {
   name: string;
   description?: string;
@@ -48,6 +57,9 @@ export interface AIProvider {
   // Генерация по всему тексту документа — для материалов без базы знаний.
   // ruleContext — подсказка конкретного правила при перегенерации одного вопроса.
   generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string): Promise<GeneratedQuestion[]>;
+
+  // Элементы игр по правилам темы: «Можно или нельзя?» и «Карточки».
+  generateGameItems(topicName: string, rules: ExtractedRule[], count: number): Promise<GeneratedGameItem[]>;
 
   // Проверка СТРОГО по materialContext (правило + цитата, иначе весь текст материала).
   gradeOpenAnswer(question: string, expectedKeywords: string[], answer: string, materialContext: string | null): Promise<GradeResult>;

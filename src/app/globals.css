@@ -144,7 +144,8 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700;
 /* Карточки уровней */
 .level-card { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: var(--text) !important; cursor: pointer; transition: transform 0.15s ease; }
 .level-card:hover { transform: translateY(-4px); }
-.level-card.disabled { cursor: default; opacity: 0.55; filter: grayscale(0.6); }
+.level-card.disabled, .level-card:disabled { cursor: default; opacity: 0.55; filter: grayscale(0.6); }
+button.level-card { border: 1px solid var(--border); }
 .level-card.disabled:hover { transform: none; }
 .level-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--level); }
 .level-card .level-title { font-size: 20px; font-weight: 900; color: var(--level); }

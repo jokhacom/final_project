@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
-import { isLevel, QUESTIONS_PER_TEST } from "@/lib/levels";
-import { getTestMinutes } from "@/lib/testSettings";
+import { isLevel } from "@/lib/levels";
+import { examSplit, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
 
 function sample<T>(arr: T[], n: number): T[] {
@@ -28,8 +28,8 @@ function pick(pool: Q[], choice: number, open: number): Q[] {
   return [...a, ...b, ...rest.slice(0, Math.max(0, choice + open - a.length - b.length))];
 }
 
-// Новичок / Middle / Professional — 10 вопросов уровня (5 с вариантами + 5 открытых).
-// Итоговый экзамен — 3 Новичок + 3 Middle + 4 Professional, тоже 5 + 5.
+// Новичок / Middle / Professional — N вопросов уровня (по умолчанию 10: 5 с вариантами + 5 открытых).
+// Итоговый экзамен — 30% Новичок + 30% Middle + 40% Professional (для 10 вопросов: 3 + 3 + 4).
 // Каждая попытка — новая случайная выборка из активных материалов.
 export async function POST(req: NextRequest) {
   const user = await requireUser();
@@ -41,18 +41,25 @@ export async function POST(req: NextRequest) {
   const activeOnly = activeQuestionsFilter;
   const select = { id: true, type: true, level: true };
 
+  const n = await getQuestionCount();
   let picked: Q[];
   if (level === "EXAM") {
     const [beginner, middle, professional] = await Promise.all(
       (["BEGINNER", "MIDDLE", "PROFESSIONAL"] as const).map((l) => db.question.findMany({ where: { level: l, ...activeOnly }, select }))
     );
-    picked = [...pick(beginner, 1, 2), ...pick(middle, 2, 1), ...pick(professional, 2, 2)];
+    // По каждому уровню примерно поровну вопросов с вариантами и открытых; у Новичка больше открытых, у Middle — с вариантами.
+    const split = examSplit(n);
+    picked = [
+      ...pick(beginner, Math.floor(split.BEGINNER / 2), Math.ceil(split.BEGINNER / 2)),
+      ...pick(middle, Math.ceil(split.MIDDLE / 2), Math.floor(split.MIDDLE / 2)),
+      ...pick(professional, Math.ceil(split.PROFESSIONAL / 2), Math.floor(split.PROFESSIONAL / 2)),
+    ];
   } else {
     const pool = await db.question.findMany({ where: { level, ...activeOnly }, select });
-    picked = pick(pool, 5, 5);
+    picked = pick(pool, Math.ceil(n / 2), Math.floor(n / 2));
   }
 
-  if (picked.length < QUESTIONS_PER_TEST) {
+  if (picked.length < n) {
     return NextResponse.json(
       { error: "Для этого уровня пока недостаточно вопросов. Попросите администратора добавить материалы и вопросы." },
       { status: 422 }

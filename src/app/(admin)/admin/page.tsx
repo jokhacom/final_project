@@ -21,6 +21,7 @@ export default function AdminHome() {
   const [dailyQuiz, setDailyQuiz] = useState<boolean | null>(null);
   const [minutes, setMinutes] = useState("15");
   const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
+  const [qCount, setQCount] = useState("10");
   const status = useAdminStatus();
   const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const loadUsers = () => fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
@@ -57,6 +58,8 @@ export default function AdminHome() {
         setDailyQuiz(list.some((s: any) => s.key === "daily_quiz_enabled" && s.value === "true"));
         const dur = list.find((s: any) => s.key === "test_duration_min");
         if (dur) setMinutes(dur.value);
+        const qc = list.find((s: any) => s.key === "test_question_count");
+        if (qc) setQCount(qc.value);
       });
   }, []);
 
@@ -64,13 +67,19 @@ export default function AdminHome() {
 
   async function saveMinutes() {
     setMinutesSaved(null);
-    const res = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: "test_duration_min", value: minutes.trim() }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setMinutesSaved(res.ok ? "Сохранено — действует для новых попыток" : data.error ?? "Не удалось сохранить");
+    for (const [key, value] of [
+      ["test_duration_min", minutes.trim()],
+      ["test_question_count", qCount],
+    ]) {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return setMinutesSaved(data.error ?? "Не удалось сохранить");
+    }
+    setMinutesSaved("Сохранено — действует для новых попыток");
   }
 
   async function toggleDailyQuiz() {
@@ -89,7 +98,13 @@ export default function AdminHome() {
         ...status.levels.map((l) => ({
           ok: l.ready,
           label: `${levelInfo(l.id).label}: ${l.total} вопросов (${l.choice} с вариантами, ${l.open} открытых)`,
-          hint: l.ready ? (l.balanced ? undefined : "лучше минимум 5 + 5") : l.id === "EXAM" ? "нужно 3 / 3 / 4 вопроса по уровням" : "нужно минимум 10",
+          hint: l.ready
+            ? l.balanced
+              ? undefined
+              : `лучше минимум ${Math.floor(l.needed / 2)} + ${Math.floor(l.needed / 2)}`
+            : l.id === "EXAM"
+              ? "нужно 30% / 30% / 40% вопросов по уровням"
+              : `нужно минимум ${l.needed}`,
         })),
         {
           ok: status.ai.configured,
@@ -227,11 +242,21 @@ export default function AdminHome() {
           <h2>⚙️ Настройки</h2>
           <div className="row between" style={{ marginBottom: 16 }}>
             <div>
-              <div style={{ fontWeight: 800 }}>Время на тест</div>
-              <div className="muted small">Сколько минут даётся на 10 вопросов (от 1 до 120). Уже начатые попытки не меняются.</div>
+              <div style={{ fontWeight: 800 }}>Тест: вопросов и время</div>
+              <div className="muted small">
+                Сколько вопросов в одном тесте (половина с вариантами, половина открытых) и сколько минут на него (1–120). Уже начатые попытки не
+                меняются. Для 15 и 20 вопросов на каждом уровне нужно соответственно больше вопросов в банке.
+              </div>
               {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
             </div>
             <div className="row">
+              <select className="select" style={{ width: "auto" }} value={qCount} onChange={(e) => setQCount(e.target.value)}>
+                {["10", "15", "20"].map((v) => (
+                  <option key={v} value={v}>
+                    {v} вопросов
+                  </option>
+                ))}
+              </select>
               <input className="input" style={{ width: 90 }} type="number" min={1} max={120} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
               <span className="muted small">мин</span>
               <button className="btn btn-primary btn-sm" onClick={saveMinutes}>

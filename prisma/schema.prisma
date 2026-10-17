@@ -86,6 +86,7 @@ model Topic {
 
   rules     Rule[]
   questions Question[]
+  gameItems GameItem[]
 }
 
 enum RuleType {
@@ -210,4 +211,34 @@ model Changelog {
 model Setting {
   key   String @id
   value String
+}
+
+// Обучение: готовые презентации, которые загружает администратор (PDF).
+model Presentation {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  fileName    String
+  data        Bytes    // сам PDF (до ~4 МБ — лимит запроса Vercel)
+  size        Int
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+enum GameKind {
+  TRUE_FALSE // «Можно или нельзя?»: фраза сотрудника клиенту — допустима или нет
+  FLASHCARD  // «Карточки»: ситуация → правильное поведение
+}
+
+// Элемент обучающей игры. Создаётся ИИ по правилам темы или вручную администратором.
+model GameItem {
+  id          String   @id @default(cuid())
+  kind        GameKind
+  prompt      String   // фраза (TRUE_FALSE) или ситуация (FLASHCARD)
+  answer      String?  // обратная сторона карточки (FLASHCARD)
+  isCorrect   Boolean? // можно ли так сказать (TRUE_FALSE)
+  explanation String?  // почему — со ссылкой на правило
+  topicId     String?
+  topic       Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
 }

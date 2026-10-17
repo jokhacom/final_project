@@ -14,6 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     include: {
       rules: { include: { questions: { select: { id: true, text: true, type: true } } } },
       questions: { select: { id: true, text: true, type: true, level: true } },
+      _count: { select: { gameItems: true } },
     },
     orderBy: { createdAt: "asc" },
   });
