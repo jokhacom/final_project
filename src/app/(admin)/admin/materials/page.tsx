@@ -389,7 +389,7 @@ export default function MaterialsAdminPage() {
               )}
               {m._count.topics > 0 && (
                 <button className="btn btn-ghost btn-sm" onClick={() => toggleExpand(m.id)}>
-                  {expanded === m.id ? "Скрыть" : "База знаний"}
+                  {expanded === m.id ? "📚 Скрыть темы" : "📚 Показать темы"}
                 </button>
               )}
             </div>
