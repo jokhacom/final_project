@@ -20,13 +20,19 @@ export async function POST(req: NextRequest) {
 
   const question = await db.question.findUnique({
     where: { id: questionId },
-    include: { sourceMaterial: true, rule: true },
+    include: { sourceMaterial: true, rule: true, topic: { include: { rules: true } } },
   });
   if (!question) return NextResponse.json({ error: "Вопрос не найден" }, { status: 404 });
 
   const answer = String(answerText ?? "").slice(0, 4000);
   const expectedKeywords = (question.expectedKeywords as string[] | null) ?? [];
-  let materialContext = question.sourceMaterial?.content ?? null;
+  // Контекст для проверки. Если вопрос привязан к теме — даём ИИ все правила этой
+  // темы: они точно относятся к вопросу, даже если документ большой (книга).
+  // Иначе — начало текста документа.
+  let materialContext = question.topic
+    ? `[Тема «${question.topic.name}» — правила из документа]\n` +
+      question.topic.rules.map((r) => `- [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`).join("\n")
+    : question.sourceMaterial?.content ?? null;
   if (question.modelAnswer) {
     materialContext = `[Эталонный ответ, который составил администратор]\n${question.modelAnswer}\n\n` + (materialContext ?? "");
   }

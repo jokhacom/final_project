@@ -14,6 +14,8 @@ import { requireAdmin, requireSuperadmin } from "@/lib/session";
 // 2) ruleId указан → вопросы по одному конкретному правилу (более узкая генерация).
 // 3) ни то ни другое → по всему тексту материала (обратная совместимость со
 //    старыми материалами, для которых база знаний ещё не построена).
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const admin = await requireSuperadmin();
   if (admin instanceof NextResponse) return admin;
