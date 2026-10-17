@@ -19,6 +19,7 @@ export default function LevelsPage() {
   const firstName = session?.user?.name?.split(" ")[0];
   const [ready, setReady] = useState<Record<string, boolean> | null>(null);
   const [inTest, setInTest] = useState<Record<string, number>>({});
+  const [left, setLeft] = useState<Record<string, number | null>>({});
   const [minutes, setMinutes] = useState(15);
   const [count, setCount] = useState(10);
 
@@ -28,6 +29,7 @@ export default function LevelsPage() {
       .then((d) => {
         setReady(Object.fromEntries((d.levels ?? []).map((l: { id: string; ready: boolean }) => [l.id, l.ready])));
         setInTest(Object.fromEntries((d.levels ?? []).map((l: { id: string; inTest: number }) => [l.id, l.inTest])));
+        setLeft(Object.fromEntries((d.levels ?? []).map((l: { id: string; attemptsLeft: number | null }) => [l.id, l.attemptsLeft])));
         if (d.minutes) setMinutes(d.minutes);
         if (d.count) setCount(d.count);
       })
@@ -51,8 +53,20 @@ export default function LevelsPage() {
               <div className="level-meta">
                 {inTest[l.id] || count} {plural(inTest[l.id] || count)} · {minutes} мин · до 100 🍬
               </div>
+              {left[l.id] != null && left[l.id]! > 0 && <div className="level-meta">Осталось попыток: {left[l.id]}</div>}
             </>
           );
+          // Попытки по уровню закончились (лимит задаёт администратор).
+          if (left[l.id] === 0) {
+            return (
+              <div key={l.id} className="card level-card disabled" style={{ ["--level" as any]: l.color }}>
+                {content}
+                <span className="badge" style={{ alignSelf: "flex-start" }}>
+                  🔒 Попытки закончились
+                </span>
+              </div>
+            );
+          }
           // Пока вопросов для уровня недостаточно — карточка неактивна.
           if (ready && ready[l.id] === false) {
             return (

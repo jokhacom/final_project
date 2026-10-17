@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
   if (key === "test_question_count" && !isValidQuestionCount(Number(value))) {
     return NextResponse.json({ error: `Вопросов в тесте — целое число от 1 до ${MAX_QUESTION_COUNT}` }, { status: 400 });
   }
+  if (key === "test_attempt_limit") {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0) return NextResponse.json({ error: "Попыток — целое число, 0 — без ограничений" }, { status: 400 });
+  }
   const setting = await db.setting.upsert({
     where: { key },
     create: { key, value },

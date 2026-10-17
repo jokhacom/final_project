@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { aiProvider } from "@/lib/ai";
-import { gradeByKeywords } from "@/lib/grading/keywordGrader";
-import { features } from "@/lib/config/features";
 import { requireUser } from "@/lib/session";
 import { answerBlocker } from "@/lib/attempts";
 
-// Проверка ответов своими словами (OPEN, FIND_ERROR, FIX_MESSAGE) строго по
-// загруженным материалам. Вопрос, правило и материал берутся из БД по questionId.
-// Если у вопроса есть правило — оно идёт отдельным явным блоком поверх текста
-// документа. Если ИИ недоступен — запасная проверка по ключевым словам.
+// Ответ своими словами (OPEN, FIND_ERROR, FIX_MESSAGE) во время теста только
+// сохраняется — сотрудник сразу идёт дальше. Проверяются все такие ответы разом
+// при завершении теста (см. gradePendingAnswers в lib/grading/gradeOpen.ts).
 export async function POST(req: NextRequest) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
@@ -18,52 +14,13 @@ export async function POST(req: NextRequest) {
   const blocker = await answerBlocker(attemptId, user.id, questionId);
   if (blocker) return NextResponse.json({ error: blocker }, { status: 409 });
 
-  const question = await db.question.findUnique({
-    where: { id: questionId },
-    include: { sourceMaterial: true, rule: true, topic: { include: { rules: true } } },
-  });
-  if (!question) return NextResponse.json({ error: "Вопрос не найден" }, { status: 404 });
-
-  const answer = String(answerText ?? "").slice(0, 4000);
-  const expectedKeywords = (question.expectedKeywords as string[] | null) ?? [];
-  // Контекст для проверки. Если вопрос привязан к теме — даём ИИ все правила этой
-  // темы: они точно относятся к вопросу, даже если документ большой (книга).
-  // Иначе — начало текста документа.
-  let materialContext = question.topic
-    ? `[Тема «${question.topic.name}» — правила из документа]\n` +
-      question.topic.rules.map((r) => `- [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`).join("\n")
-    : question.sourceMaterial?.content ?? null;
-  if (question.modelAnswer) {
-    materialContext = `[Эталонный ответ, который составил администратор]\n${question.modelAnswer}\n\n` + (materialContext ?? "");
-  }
-  if (question.rule) {
-    const ruleBlock = `[Конкретное правило, которое проверяет этот вопрос — тип: ${question.rule.type}]\n${question.rule.text}${question.rule.sourceQuote ? `\n(источник: "${question.rule.sourceQuote}")` : ""}\n\n`;
-    materialContext = ruleBlock + (materialContext ?? "");
-  }
-
-  let result;
-  if (!answer.trim()) {
-    result = { correct: false, spellingErrors: 0, grammarErrors: 0, comment: "Ответ не был написан." };
-  } else if (features.GRADING_MODE === "ai") {
-    try {
-      result = await aiProvider.gradeOpenAnswer(question.text, expectedKeywords, answer, materialContext);
-    } catch (e) {
-      console.error("AI grading failed, falling back to keywords:", e);
-      result = gradeByKeywords(expectedKeywords, answer, question.modelAnswer);
-    }
-  } else {
-    result = gradeByKeywords(expectedKeywords, answer, question.modelAnswer);
-  }
-
   await db.answer.create({
     data: {
       attemptId,
       questionId,
-      rawAnswer: answer,
-      isCorrect: result.correct,
-      spellingErrors: result.spellingErrors,
-      grammarErrors: result.grammarErrors,
-      aiComment: result.comment,
+      rawAnswer: String(answerText ?? "").slice(0, 4000),
+      isCorrect: false,
+      needsGrading: true,
     },
   });
 

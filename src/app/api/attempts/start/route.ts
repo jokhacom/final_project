@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel } from "@/lib/levels";
-import { examSplit, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
+import { attemptsLeft, examSplit, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
 
 function sample<T>(arr: T[], n: number): T[] {
@@ -37,6 +37,13 @@ export async function POST(req: NextRequest) {
 
   const { level } = await req.json();
   if (!isLevel(level)) return NextResponse.json({ error: "Неизвестный уровень" }, { status: 400 });
+
+  // Лимит попыток: считаются все начатые попытки (и брошенные), чтобы нельзя было
+  // бесконечно начинать тест заново и подсматривать вопросы.
+  const left = await attemptsLeft(user);
+  if (left && left[level] <= 0) {
+    return NextResponse.json({ error: "Попытки по этому уровню закончились. Обратитесь к администратору." }, { status: 403 });
+  }
 
   const activeOnly = activeQuestionsFilter;
   const select = { id: true, type: true, level: true };

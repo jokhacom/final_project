@@ -27,7 +27,7 @@ export default function TestPage() {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [text, setText] = useState("");
-  const [phase, setPhase] = useState<"loading" | "question" | "checking" | "finishing" | "error">("loading");
+  const [phase, setPhase] = useState<"loading" | "question" | "finishing" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [deadline, setDeadline] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -98,7 +98,7 @@ export default function TestPage() {
 
   // Предупреждение при попытке закрыть вкладку во время теста.
   useEffect(() => {
-    if (phase !== "question" && phase !== "checking") return;
+    if (phase !== "question") return;
     const handler = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
@@ -110,7 +110,6 @@ export default function TestPage() {
   async function submit() {
     if (!q || !attemptId || busy) return;
     setBusy(true);
-    if (!isChoice) setPhase("checking");
     const res = await fetch(isChoice ? "/api/attempts/submit-mc" : "/api/grade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -157,7 +156,14 @@ export default function TestPage() {
       <main className="container narrow">
         <div className="card center stack" style={{ padding: 40 }}>
           <div className="spinner" />
-          <p>{phase === "loading" ? "Готовим вопросы..." : "Подводим итоги..."}</p>
+          {phase === "loading" ? (
+            <p>Готовим вопросы...</p>
+          ) : (
+            <>
+              <h2>Мы проверяем ваши ответы...</h2>
+              <p className="muted">Это займёт несколько секунд</p>
+            </>
+          )}
         </div>
       </main>
     );
@@ -183,14 +189,7 @@ export default function TestPage() {
         ))}
       </div>
 
-      {phase === "checking" ? (
-        <div className="card center stack mt" style={{ padding: 40 }}>
-          <div className="spinner" />
-          <h2>Мы проверяем ваш ответ...</h2>
-          <p className="muted">Это займёт несколько секунд</p>
-        </div>
-      ) : (
-        q && (
+      {q && (
           <div className="card stack mt">
             <div className="muted small">
               Вопрос {index + 1} из {questions.length} · {TYPE_HINT[q.type] ?? ""}
@@ -232,7 +231,6 @@ export default function TestPage() {
               {index + 1 === questions.length ? "Завершить тест ✓" : "Ответить →"}
             </button>
           </div>
-        )
       )}
     </main>
   );

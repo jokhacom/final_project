@@ -3,6 +3,7 @@ import { isChoiceType } from "./ai/provider";
 import { calculateCandies, resultLevel } from "./scoring";
 import { achievementById, checkNewAchievements } from "./achievements";
 import { TEST_GRACE_SEC } from "./levels";
+import { gradePendingAnswers } from "./grading/gradeOpen";
 
 export const attemptQuestionIds = (a: { questionIds: unknown }) => (Array.isArray(a.questionIds) ? (a.questionIds as string[]) : []);
 
@@ -101,6 +102,9 @@ export async function finishAttempt(attemptId: string) {
       })),
     });
   }
+
+  // Открытые ответы проверяются здесь, все разом.
+  await gradePendingAnswers(attemptId);
 
   const answers = await db.answer.findMany({ where: { attemptId }, include: { question: { include: { topic: true } } } });
   const candies = calculateCandies(answers);

@@ -27,6 +27,32 @@ export function examSplit(total: number) {
   return { BEGINNER: b, MIDDLE: m, PROFESSIONAL: total - b - m };
 }
 
+// Сколько раз сотрудник может пройти каждый уровень (Setting "test_attempt_limit").
+// 0 — без ограничений. Администраторов лимит не касается.
+export async function getAttemptLimit(): Promise<number> {
+  const s = await db.setting.findUnique({ where: { key: "test_attempt_limit" } });
+  const n = Number(s?.value);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+// Сколько попыток по каждому уровню осталось у сотрудника (null — без ограничений).
+export async function attemptsLeft(user: { id: string; role: string }): Promise<Record<string, number> | null> {
+  const limit = await getAttemptLimit();
+  if (!limit || user.role !== "EMPLOYEE") return null;
+  const u = await db.user.findUnique({ where: { id: user.id }, select: { attemptsResetAt: true } });
+  const used = await db.testAttempt.groupBy({
+    by: ["level"],
+    where: { userId: user.id, ...(u?.attemptsResetAt ? { startedAt: { gt: u.attemptsResetAt } } : {}) },
+    _count: { _all: true },
+  });
+  const left: Record<string, number> = {};
+  for (const level of ["BEGINNER", "MIDDLE", "PROFESSIONAL", "EXAM"]) {
+    const n = used.find((x) => x.level === level)?._count._all ?? 0;
+    left[level] = Math.max(0, limit - n);
+  }
+  return left;
+}
+
 export async function getTestMinutes(): Promise<number> {
   const s = await db.setting.findUnique({ where: { key: "test_duration_min" } });
   const n = Number(s?.value);
