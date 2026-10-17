@@ -19,7 +19,14 @@ type Material = {
 };
 
 type Rule = { id: string; type: string; text: string; sourceQuote?: string | null; questions: { id: string }[] };
-type Topic = { id: string; name: string; description?: string | null; rules: Rule[]; questions: { id: string; level: string }[] };
+type Topic = {
+  id: string;
+  name: string;
+  description?: string | null;
+  rules: Rule[];
+  questions: { id: string; level: string }[];
+  _count: { gameItems: number };
+};
 
 type Progress = { materialId: string; stage: string; done: number; total: number; log: string[] };
 
@@ -79,6 +86,7 @@ export default function MaterialsAdminPage() {
   const [replaceId, setReplaceId] = useState("");
   const [autoCreate, setAutoCreate] = useState(true);
   const [perTopic, setPerTopic] = useState(4);
+  const [gamesPerTopic, setGamesPerTopic] = useState(3);
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [topicsByMaterial, setTopicsByMaterial] = useState<Record<string, Topic[]>>({});
@@ -181,6 +189,29 @@ export default function MaterialsAdminPage() {
     return { created, failed, jobs: jobs.length };
   }
 
+  // Игры создаются только по команде администратора — кнопкой «Создать игры».
+  // По одному запросу к ИИ на тему; темы, где игры уже есть, пропускаются.
+  async function generateGames(materialId: string) {
+    const topics = await loadTopics(materialId);
+    const todo = topics.filter((t) => !t._count.gameItems);
+    let created = 0;
+    let failed = 0;
+    for (let i = 0; i < todo.length; i++) {
+      if (stopRef.current) throw new Error(`Остановлено. Создано элементов игр: ${created}`);
+      const t = todo[i];
+      step({ materialId, stage: `Создаём игры: ${i + 1} из ${todo.length} — «${t.name}»`, done: i, total: todo.length });
+      try {
+        const r = await withRetry(() => post("/api/learning/games/generate", { topicId: t.id, count: gamesPerTopic }));
+        created += r.created;
+      } catch (e) {
+        failed++;
+        step({ materialId }, `⚠️ «${t.name}» пропущено: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    await loadTopics(materialId);
+    return { created, failed, todo: todo.length };
+  }
+
   const createTests = (m: Pick<Material, "id" | "chunks" | "status">, analyze: boolean) =>
     run(`auto:${m.id}`, async () => {
       const a = analyze ? await analyzeAll(m) : null;
@@ -236,6 +267,21 @@ export default function MaterialsAdminPage() {
         " Проверьте вопросы в разделе «Вопросы»."
     );
   }
+
+  const createGames = (m: Material) => {
+    if (!confirm(`Создать игры («Можно или нельзя?» и «Карточки») по темам документа «${m.title}»? По ${gamesPerTopic} фразы и ${gamesPerTopic} карточки на тему.`)) return;
+    return run(`games:${m.id}`, async () => {
+      const g = await generateGames(m.id);
+      setExpanded(m.id);
+      setNotice(
+        g.todo === 0
+          ? "Игры уже созданы по всем темам этого документа. Изменить или удалить их можно в «Обучении»."
+          : `Создано элементов игр: ${g.created}.` +
+              (g.failed ? ` Не удалось по ${g.failed} темам — нажмите «Создать игры» ещё раз.` : "") +
+              " Посмотреть и поправить — в «Админ» → «Обучение»."
+      );
+    });
+  };
 
   const handleAnalyze = (m: Material) => {
     if (
@@ -315,6 +361,19 @@ export default function MaterialsAdminPage() {
                 />
                 <span className="muted">(для книги с десятками тем хватит 2–4)</span>
               </label>
+              <label className="row small">
+                Для «🎮 Создать игры» — элементов на тему:
+                <input
+                  className="input"
+                  style={{ width: 70, padding: "6px 8px" }}
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={gamesPerTopic}
+                  onChange={(e) => setGamesPerTopic(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
+                />
+              </label>
+
             </>
           )}
           <div>
@@ -382,6 +441,11 @@ export default function MaterialsAdminPage() {
                   >
                     {busy === `auto:${m.id}` ? "Работаем..." : "🤖 Создать тесты"}
                   </button>
+                  {m._count.topics > 0 && (
+                    <button className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => createGames(m)} title="Создать обучающие игры по темам документа">
+                      {busy === `games:${m.id}` ? "Работаем..." : "🎮 Создать игры"}
+                    </button>
+                  )}
                   <button className="btn btn-ghost btn-sm" onClick={() => handleAnalyze(m)} disabled={!!busy}>
                     {busy === `analyze:${m.id}` ? "Анализ..." : m.status === "PROCESSED" ? "Переанализировать" : "Только анализ"}
                   </button>

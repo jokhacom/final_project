@@ -7,6 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 
 const LINKS = [
   { href: "/levels", label: "Уровни" },
+  { href: "/learn", label: "Обучение" },
   { href: "/me", label: "Кабинет" },
   { href: "/leaderboard", label: "Рейтинг" },
   { href: "/whats-new", label: "Что нового" },

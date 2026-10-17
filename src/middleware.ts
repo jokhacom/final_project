@@ -25,6 +25,7 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/levels",
+    "/learn",
     "/test/:path*",
     "/result/:path*",
     "/me",

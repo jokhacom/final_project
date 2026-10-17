@@ -1,4 +1,4 @@
-import type { AIProvider, ExtractedRule, GeneratedQuestion, Level } from "./provider";
+import type { AIProvider, ExtractedRule, GeneratedGameItem, GeneratedQuestion, Level } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
@@ -105,6 +105,28 @@ ${materialText}
 Создай ${count} заданий, основанных ТОЛЬКО на содержании документа.
 ${QUESTION_FORMAT}`;
       return normalizeQuestions(parseJson(await complete(prompt, 8000)));
+    },
+
+    async generateGameItems(topicName, rules, count) {
+      const rulesText = rules
+        .map((r, i) => `${i + 1}. [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`)
+        .join("\n");
+      const prompt = `Ты делаешь обучающие мини-игры для сотрудников службы поддержки по теме "${topicName}".
+Правила темы (используй ТОЛЬКО их):
+${rulesText}
+
+Создай ${count} элементов игры «Можно или нельзя?» (kind: TRUE_FALSE): короткая реплика сотрудника клиенту (1–2 предложения, как в реальном чате), isCorrect — можно ли так ответить по правилам. Примерно половина допустимых, половина с нарушением правила.
+И ${count} карточек (kind: FLASHCARD): prompt — короткая ситуация с клиентом, answer — как правильно поступить или ответить (1–2 предложения).
+У каждого элемента explanation — одно предложение, почему так, со ссылкой на правило.
+Ответь строго JSON-массивом без markdown:
+[{"kind":"TRUE_FALSE","prompt":"...","isCorrect":false,"explanation":"..."},
+ {"kind":"FLASHCARD","prompt":"...","answer":"...","explanation":"..."}]`;
+      const list = parseJson<GeneratedGameItem[]>(await complete(prompt, 6000));
+      return (Array.isArray(list) ? list : []).filter(
+        (g) =>
+          g?.prompt &&
+          ((g.kind === "TRUE_FALSE" && typeof g.isCorrect === "boolean") || (g.kind === "FLASHCARD" && !!g.answer))
+      );
     },
 
     async gradeOpenAnswer(question, expectedKeywords, answer, materialContext) {
