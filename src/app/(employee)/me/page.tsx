@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { levelInfo } from "@/lib/levels";
+import { ChangePassword } from "@/components/ChangePassword";
 
 type Cabinet = {
   user: { name: string; username: string };
@@ -42,6 +43,7 @@ export default function MyCabinetPage() {
       <p className="muted">
         {data.user.name} · @{data.user.username}
       </p>
+      <ChangePassword />
 
       <div className="grid grid-4 mt">
         {stats.map((s) => (
