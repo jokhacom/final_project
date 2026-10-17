@@ -120,6 +120,7 @@ model Question {
   modelAnswer      String?   // эталонный ответ для открытых заданий (показывается в разборе, по нему проверяет ИИ)
   explanation      String?
   image            String?   // скриншот к вопросу (data URL, сжимается в браузере перед загрузкой)
+  archivedAt       DateTime? // вопрос в архиве: в тесты не попадает, но его можно вернуть
 
   sourceMaterialId String?
   sourceMaterial   Material? @relation(fields: [sourceMaterialId], references: [id])

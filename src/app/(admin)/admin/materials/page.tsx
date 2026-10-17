@@ -93,8 +93,9 @@ export default function MaterialsAdminPage() {
   // пустое поле сразу превращалось в «1», и «2» набиралось как «12»).
   const [perTopicText, setPerTopicText] = useState("3");
   const [gamesPerTopicText, setGamesPerTopicText] = useState("3");
-  const perTopic = Math.max(1, Math.round(Number(perTopicText)) || 1);
-  const gamesPerTopic = Math.max(1, Math.round(Number(gamesPerTopicText)) || 1);
+  // 0 — этот вид не создаётся.
+  const perTopic = Math.max(0, Math.round(Number(perTopicText)) || 0);
+  const gamesPerTopic = Math.max(0, Math.round(Number(gamesPerTopicText)) || 0);
   const [language, setLanguage] = useState<"auto" | "ru" | "uz">("auto");
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -177,6 +178,7 @@ export default function MaterialsAdminPage() {
   // Вопросы по всем темам для трёх уровней. Темы, где вопросы этого уровня уже есть, пропускаются.
   async function generateAll(materialId: string) {
     const topics = await loadTopics(materialId);
+    if (perTopic === 0) return { created: 0, failed: 0, jobs: 0 };
     const jobs = topics.flatMap((t) =>
       LEVELS.filter((l) => !t.questions.some((q) => q.level === l.id)).map((l) => ({ topic: t, level: l }))
     );
@@ -204,6 +206,7 @@ export default function MaterialsAdminPage() {
   // По одному запросу к ИИ на тему; темы, где игры уже есть, пропускаются.
   async function generateGames(materialId: string) {
     const topics = await loadTopics(materialId);
+    if (gamesPerTopic === 0) return { created: 0, failed: 0, todo: 0 };
     const todo = topics.filter((t) => !t._count.gameItems);
     let created = 0;
     let failed = 0;
@@ -282,6 +285,7 @@ export default function MaterialsAdminPage() {
   }
 
   const createGames = (m: Material) => {
+    if (gamesPerTopic === 0) return setNotice("В «Настройках создания» стоит 0 элементов игр на тему — укажите число больше 0.");
     if (!confirm(`Создать игры («Можно или нельзя?» и «Карточки») по темам документа «${m.title}»? По ${gamesPerTopic} фразы и ${gamesPerTopic} карточки на тему.`)) return;
     return run(`games:${m.id}`, async () => {
       const g = await generateGames(m.id);
@@ -395,12 +399,12 @@ export default function MaterialsAdminPage() {
               className="input"
               style={{ width: 80, padding: "6px 8px" }}
               type="number"
-              min={1}
+              min={0}
               value={perTopicText}
               onChange={(e) => setPerTopicText(e.target.value)}
               onBlur={() => setPerTopicText(String(perTopic))}
             />
-            <span className="muted">(для большого документа с десятками тем хватит 2–3)</span>
+            <span className="muted">(для большого документа с десятками тем хватит 2–3; 0 — только темы, без вопросов)</span>
           </label>
           <label className="row small">
             Для «🎮 Создать игры» — элементов на тему:
@@ -408,7 +412,7 @@ export default function MaterialsAdminPage() {
               className="input"
               style={{ width: 80, padding: "6px 8px" }}
               type="number"
-              min={1}
+              min={0}
               value={gamesPerTopicText}
               onChange={(e) => setGamesPerTopicText(e.target.value)}
               onBlur={() => setGamesPerTopicText(String(gamesPerTopic))}
@@ -524,7 +528,7 @@ export default function MaterialsAdminPage() {
                         <button
                           key={l.id}
                           className="btn btn-ghost btn-sm"
-                          disabled={!!busy}
+                          disabled={!!busy || perTopic === 0}
                           onClick={() => generateOne(m.id, topic.id, l.id, `topic:${topic.id}:${l.id}`)}
                         >
                           {busy === `topic:${topic.id}:${l.id}` ? "Генерируем..." : `+ ${perTopic} ${l.label}`}

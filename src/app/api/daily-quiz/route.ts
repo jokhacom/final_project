@@ -17,6 +17,6 @@ export async function GET() {
     return NextResponse.json({ enabled: false, questions: [] });
   }
 
-  const pool = await db.question.findMany({ select: { id: true, type: true, text: true, options: true } });
+  const pool = await db.question.findMany({ where: { archivedAt: null }, select: { id: true, type: true, text: true, options: true } });
   return NextResponse.json({ enabled: true, questions: sample(pool, 3) });
 }

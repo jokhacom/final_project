@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export type LevelStatus = { id: string; choice: number; open: number; total: number; ready: boolean; balanced: boolean; needed: number };
+export type LevelStatus = { id: string; choice: number; open: number; total: number; ready: boolean; balanced: boolean; needed: number; full: boolean; inTest: number };
 export type AdminStatus = {
   superadmin: boolean;
   employees: number;
