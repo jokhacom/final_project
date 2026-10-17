@@ -2,12 +2,12 @@ import { db } from "./db";
 import { isChoiceType } from "./ai/provider";
 import { calculateCandies, resultLevel } from "./scoring";
 import { achievementById, checkNewAchievements } from "./achievements";
-import { TEST_DURATION_SEC, TEST_GRACE_SEC } from "./levels";
+import { TEST_GRACE_SEC } from "./levels";
 
 export const attemptQuestionIds = (a: { questionIds: unknown }) => (Array.isArray(a.questionIds) ? (a.questionIds as string[]) : []);
 
-export function isExpired(a: { startedAt: Date }) {
-  return Date.now() > a.startedAt.getTime() + (TEST_DURATION_SEC + TEST_GRACE_SEC) * 1000;
+export function isExpired(a: { startedAt: Date; durationSec: number }) {
+  return Date.now() > a.startedAt.getTime() + (a.durationSec + TEST_GRACE_SEC) * 1000;
 }
 
 // Можно ли сейчас принять ответ на вопрос в этой попытке. Возвращает текст ошибки или null.
@@ -50,7 +50,9 @@ export async function buildResult(attemptId: string) {
       userAnswer: choice ? (selected != null && options ? options[selected] ?? null : null) : a.rawAnswer,
       correctAnswer: choice
         ? options?.[q.correctIndex ?? -1] ?? null
-        : ((q.expectedKeywords as string[] | null) ?? []).join(", ") || null,
+        : q.modelAnswer || ((q.expectedKeywords as string[] | null) ?? []).join(", ") || null,
+      correctAnswerIsModel: !choice && !!q.modelAnswer,
+      image: q.image,
       isCorrect: a.isCorrect,
       spellingErrors: a.spellingErrors,
       grammarErrors: a.grammarErrors,

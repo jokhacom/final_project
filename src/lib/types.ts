@@ -9,6 +9,8 @@ export interface ReviewItem {
   correctIndex: number | null;
   userAnswer: string | null;
   correctAnswer: string | null;
+  correctAnswerIsModel: boolean;
+  image: string | null;
   isCorrect: boolean;
   spellingErrors: number;
   grammarErrors: number;

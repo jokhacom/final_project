@@ -9,11 +9,15 @@ export default function LevelsPage() {
   const { data: session } = useSession();
   const firstName = session?.user?.name?.split(" ")[0];
   const [ready, setReady] = useState<Record<string, boolean> | null>(null);
+  const [minutes, setMinutes] = useState(15);
 
   useEffect(() => {
     fetch("/api/levels")
       .then((r) => r.json())
-      .then((d) => setReady(Object.fromEntries((d.levels ?? []).map((l: { id: string; ready: boolean }) => [l.id, l.ready]))))
+      .then((d) => {
+        setReady(Object.fromEntries((d.levels ?? []).map((l: { id: string; ready: boolean }) => [l.id, l.ready])));
+        if (d.minutes) setMinutes(d.minutes);
+      })
       .catch(() => setReady(null));
   }, []);
 
@@ -29,7 +33,7 @@ export default function LevelsPage() {
               <div style={{ fontSize: 34 }}>{l.icon}</div>
               <div className="level-title">{l.label}</div>
               <div className="muted">{l.description}</div>
-              <div className="level-meta">10 вопросов · 15 минут · до 100 🍬</div>
+              <div className="level-meta">10 вопросов · {minutes} мин · до 100 🍬</div>
             </>
           );
           // Пока вопросов для уровня недостаточно — карточка неактивна.

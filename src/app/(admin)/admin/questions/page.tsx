@@ -13,7 +13,9 @@ type Q = {
   options: string[] | null;
   correctIndex: number | null;
   expectedKeywords: string[] | null;
+  modelAnswer: string | null;
   explanation: string | null;
+  image: string | null;
   sourceMaterial: { title: string; version: number } | null;
   topic: { name: string } | null;
 };
@@ -166,6 +168,8 @@ export default function QuestionsPage() {
                   )}
                 </div>
                 <p style={{ fontWeight: 700, whiteSpace: "pre-wrap" }}>{q.text}</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {q.image && <img src={q.image} alt="Скриншот" className="question-image" style={{ maxHeight: 180, marginBottom: 8 }} />}
                 {q.options ? (
                   <ol className="small" style={{ margin: 0 }}>
                     {q.options.map((o, i) => (
@@ -175,7 +179,10 @@ export default function QuestionsPage() {
                     ))}
                   </ol>
                 ) : (
-                  <div className="small muted">Ключевые слова: {(q.expectedKeywords ?? []).join(", ")}</div>
+                  <div className="small muted stack" style={{ gap: 4 }}>
+                    {q.modelAnswer && <div>Эталонный ответ: {q.modelAnswer}</div>}
+                    {!!q.expectedKeywords?.length && <div>Ключевые слова: {q.expectedKeywords.join(", ")}</div>}
+                  </div>
                 )}
                 {q.explanation && <div className="small muted mt">💡 {q.explanation}</div>}
                 <div className="row mt">

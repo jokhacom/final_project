@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ImagePicker } from "./ImagePicker";
 
 export type QuestionDraft = {
   id?: string;
@@ -10,7 +11,9 @@ export type QuestionDraft = {
   options: string[];
   correctIndex: number;
   expectedKeywords: string;
+  modelAnswer: string;
   explanation: string;
+  image: string;
 };
 
 export const TYPE_LABEL: Record<string, string> = {
@@ -30,7 +33,9 @@ export const emptyDraft = (level = "BEGINNER"): QuestionDraft => ({
   options: ["", "", "", ""],
   correctIndex: 0,
   expectedKeywords: "",
+  modelAnswer: "",
   explanation: "",
+  image: "",
 });
 
 export function toDraft(q: any): QuestionDraft {
@@ -44,7 +49,9 @@ export function toDraft(q: any): QuestionDraft {
     options,
     correctIndex: q.correctIndex ?? 0,
     expectedKeywords: Array.isArray(q.expectedKeywords) ? q.expectedKeywords.join(", ") : "",
+    modelAnswer: q.modelAnswer ?? "",
     explanation: q.explanation ?? "",
+    image: q.image ?? "",
   };
 }
 
@@ -59,13 +66,14 @@ export function QuestionForm({ initial, onSaved, onCancel }: { initial: Question
   async function save() {
     setSaving(true);
     setError(null);
-    const body: any = { type: q.type, level: q.level, text: q.text, explanation: q.explanation };
+    const body: any = { type: q.type, level: q.level, text: q.text, explanation: q.explanation, image: q.image };
     if (isChoice) {
       const filled = q.options.map((o, i) => ({ o: o.trim(), i })).filter((x) => x.o);
       body.options = filled.map((x) => x.o);
       body.correctIndex = filled.findIndex((x) => x.i === q.correctIndex);
     } else {
       body.expectedKeywords = q.expectedKeywords.split(",").map((k) => k.trim()).filter(Boolean);
+      body.modelAnswer = q.modelAnswer;
     }
     const res = await fetch(q.id ? `/api/questions/${q.id}` : "/api/questions/manual", {
       method: q.id ? "PATCH" : "POST",
@@ -128,11 +136,32 @@ export function QuestionForm({ initial, onSaved, onCancel }: { initial: Question
           ))}
         </div>
       ) : (
-        <label className="field">
-          Ключевые слова правильного ответа (через запятую)
-          <input className="input" value={q.expectedKeywords} onChange={(e) => setQ({ ...q, expectedKeywords: e.target.value })} />
-        </label>
+        <>
+          <label className="field">
+            Эталонный ответ — как ответили бы вы
+            <textarea
+              className="textarea"
+              rows={4}
+              style={{ minHeight: 100 }}
+              value={q.modelAnswer}
+              onChange={(e) => setQ({ ...q, modelAnswer: e.target.value })}
+              placeholder="Например: Здравствуйте! Понимаю ваш вопрос. Сейчас проверю начисления и подробно объясню..."
+            />
+            <span className="muted small" style={{ fontWeight: 400 }}>
+              Сотрудник увидит его в разборе после теста. ИИ проверяет ответ по смыслу с опорой на эталон.
+            </span>
+          </label>
+          <label className="field">
+            Ключевые слова (через запятую, необязательно)
+            <input className="input" value={q.expectedKeywords} onChange={(e) => setQ({ ...q, expectedKeywords: e.target.value })} />
+            <span className="muted small" style={{ fontWeight: 400 }}>
+              Для проверки без ИИ: ответ засчитывается, если в нём есть хотя бы одно слово. Если не заполнять — ответ сверяется с эталонным.
+            </span>
+          </label>
+        </>
       )}
+
+      <ImagePicker value={q.image} onChange={(image) => setQ({ ...q, image })} />
 
       <label className="field">
         Пояснение для разбора (какой ответ верный и почему)

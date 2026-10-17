@@ -116,7 +116,9 @@ model Question {
   options          Json?
   correctIndex     Int?
   expectedKeywords Json?
+  modelAnswer      String?   // эталонный ответ для открытых заданий (показывается в разборе, по нему проверяет ИИ)
   explanation      String?
+  image            String?   // скриншот к вопросу (data URL, сжимается в браузере перед загрузкой)
 
   sourceMaterialId String?
   sourceMaterial   Material? @relation(fields: [sourceMaterialId], references: [id])
@@ -138,6 +140,7 @@ model TestAttempt {
   level      Level
   candies    Int
   questionIds Json?    // порядок вопросов, выданных в этой попытке (для разбора и проверки)
+  durationSec Int      @default(900) // время на тест, действовавшее в момент старта
   startedAt  DateTime @default(now())
   finishedAt DateTime?
 

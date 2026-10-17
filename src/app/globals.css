@@ -158,6 +158,7 @@ label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700;
 .timer { font-variant-numeric: tabular-nums; font-weight: 900; font-size: 18px; padding: 6px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
 .timer.danger { color: #fff; background: var(--danger); border-color: var(--danger); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { transform: scale(1.06); } }
+.question-image { display: block; max-width: 100%; max-height: 420px; border-radius: 14px; border: 1px solid var(--border); object-fit: contain; background: #fff; }
 .question-text { font-size: 19px; font-weight: 800; line-height: 1.5; white-space: pre-wrap; }
 .option {
   display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left;

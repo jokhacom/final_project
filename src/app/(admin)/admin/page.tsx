@@ -19,16 +19,34 @@ export default function AdminHome() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [dailyQuiz, setDailyQuiz] = useState<boolean | null>(null);
+  const [minutes, setMinutes] = useState("15");
+  const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
   const status = useAdminStatus();
 
   useEffect(() => {
     fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d) => setDailyQuiz((d.settings ?? []).some((s: any) => s.key === "daily_quiz_enabled" && s.value === "true")));
+      .then((d) => {
+        const list = d.settings ?? [];
+        setDailyQuiz(list.some((s: any) => s.key === "daily_quiz_enabled" && s.value === "true"));
+        const dur = list.find((s: any) => s.key === "test_duration_min");
+        if (dur) setMinutes(dur.value);
+      });
   }, []);
 
   const exportUrl = `/api/admin/export?${new URLSearchParams({ ...(userId && { userId }), ...(from && { from }), ...(to && { to }) })}`;
+
+  async function saveMinutes() {
+    setMinutesSaved(null);
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "test_duration_min", value: minutes.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setMinutesSaved(res.ok ? "Сохранено — действует для новых попыток" : data.error ?? "Не удалось сохранить");
+  }
 
   async function toggleDailyQuiz() {
     const next = !dailyQuiz;
@@ -147,6 +165,20 @@ export default function AdminHome() {
       {isSuper && dailyQuiz !== null && (
         <div className="card">
           <h2>⚙️ Настройки</h2>
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Время на тест</div>
+              <div className="muted small">Сколько минут даётся на 10 вопросов (от 1 до 120). Уже начатые попытки не меняются.</div>
+              {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
+            </div>
+            <div className="row">
+              <input className="input" style={{ width: 90 }} type="number" min={1} max={120} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+              <span className="muted small">мин</span>
+              <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
+                Сохранить
+              </button>
+            </div>
+          </div>
           <div className="row between">
             <div>
               <div style={{ fontWeight: 800 }}>Ежедневный мини-тест (3 вопроса)</div>

@@ -24,6 +24,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     correctIndex: body.correctIndex ?? existing.correctIndex,
     expectedKeywords: body.expectedKeywords ?? existing.expectedKeywords,
     explanation: body.explanation ?? existing.explanation,
+    modelAnswer: body.modelAnswer ?? existing.modelAnswer,
+    image: body.image ?? existing.image, // "" — убрать скриншот
   };
   const checked = validateQuestion(merged);
   if ("error" in checked) return NextResponse.json({ error: checked.error }, { status: 400 });
