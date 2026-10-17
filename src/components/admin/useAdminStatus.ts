@@ -7,6 +7,7 @@ export type AdminStatus = {
   superadmin: boolean;
   employees: number;
   materials: number;
+  pendingReviews: number;
   levels: LevelStatus[];
   ai: { provider: string; configured: boolean; keyEnv: string; gradingMode: "ai" | "keyword" };
   email: boolean;

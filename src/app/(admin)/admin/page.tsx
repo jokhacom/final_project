@@ -98,6 +98,11 @@ export default function AdminHome() {
             ? `ИИ подключён (${status.ai.provider}), проверка ответов: ${status.ai.gradingMode === "ai" ? "через ИИ" : "по ключевым словам"}`
             : `ИИ не подключён — добавьте ${status.ai.keyEnv} в Vercel (сейчас проверка по ключевым словам)`,
         },
+        {
+          ok: status.pendingReviews === 0,
+          optional: true,
+          label: status.pendingReviews ? `Открытых ответов ждут ручной проверки: ${status.pendingReviews} — «Проверка»` : "Все открытые ответы проверены",
+        },
         { ok: status.email, optional: true, label: status.email ? "Обратная связь дублируется на почту" : "Почта для обратной связи не настроена (обращения видны в админке)" },
       ]
     : [];

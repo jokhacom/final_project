@@ -60,6 +60,7 @@ export async function buildResult(attemptId: string) {
       explanation: q.explanation,
       rule: q.rule?.text ?? null,
       unanswered: a.rawAnswer == null,
+      reviewed: !!a.reviewedAt,
     };
   });
 
@@ -120,7 +121,15 @@ export async function finishAttempt(attemptId: string) {
     });
   }
 
+  const newly = await refreshUserStats(userId);
+  return { newAchievements: newly.map((a) => ({ id: a.id, label: a.label, icon: a.icon })) };
+}
+
+// Пересчитать рейтинг и выдать новые достижения сотрудника — после завершения
+// теста и после ручной проверки ответа администратором.
+export async function refreshUserStats(userId: string) {
   const allAttempts = await db.testAttempt.findMany({ where: { userId, finishedAt: { not: null } } });
+  if (!allAttempts.length) return [];
   const avgCandy = allAttempts.reduce((sum, a) => sum + a.candies, 0) / allAttempts.length;
   const bestCandy = Math.max(...allAttempts.map((a) => a.candies));
   await db.leaderboardEntry.upsert({
@@ -143,8 +152,33 @@ export async function finishAttempt(attemptId: string) {
       skipDuplicates: true,
     });
   }
+  return newly;
+}
 
-  return { newAchievements: newly.map((a) => ({ id: a.id, label: a.label, icon: a.icon })) };
+// Ручная проверка ответа администратором: меняем оценку ответа и пересчитываем
+// конфеты попытки, рейтинг и достижения сотрудника.
+export async function reviewAnswer(
+  answerId: string,
+  reviewerId: string,
+  r: { isCorrect: boolean; spellingErrors: number; grammarErrors: number; comment: string | null }
+) {
+  const answer = await db.answer.update({
+    where: { id: answerId },
+    data: {
+      isCorrect: r.isCorrect,
+      spellingErrors: r.spellingErrors,
+      grammarErrors: r.grammarErrors,
+      aiComment: r.comment,
+      reviewedAt: new Date(),
+      reviewedBy: reviewerId,
+    },
+    include: { attempt: true },
+  });
+  const all = await db.answer.findMany({ where: { attemptId: answer.attemptId } });
+  const candies = calculateCandies(all);
+  await db.testAttempt.update({ where: { id: answer.attemptId }, data: { candies } });
+  if (answer.attempt.finishedAt) await refreshUserStats(answer.attempt.userId);
+  return { candies };
 }
 
 export function achievementView(achievementId: string, earnedAt: Date) {
