@@ -22,6 +22,7 @@ export default function AdminHome() {
   const [minutes, setMinutes] = useState("15");
   const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
   const [qCount, setQCount] = useState("10");
+  const [attemptLimit, setAttemptLimit] = useState("0");
   const status = useAdminStatus();
   const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const loadUsers = () => fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
@@ -60,6 +61,8 @@ export default function AdminHome() {
         if (dur) setMinutes(dur.value);
         const qc = list.find((s: any) => s.key === "test_question_count");
         if (qc) setQCount(qc.value);
+        const al = list.find((s: any) => s.key === "test_attempt_limit");
+        if (al) setAttemptLimit(al.value);
       });
   }, []);
 
@@ -70,6 +73,7 @@ export default function AdminHome() {
     for (const [key, value] of [
       ["test_duration_min", minutes.trim()],
       ["test_question_count", qCount.trim()],
+      ["test_attempt_limit", attemptLimit.trim() || "0"],
     ]) {
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -218,6 +222,16 @@ export default function AdminHome() {
                     <td>
                       {u.role !== "SUPERADMIN" && (
                         <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            title="Сбросить попытки — сотрудник снова сможет пройти тесты (история сохранится)"
+                            onClick={() => {
+                              if (confirm(`Сбросить попытки ${u.name}? Сотрудник снова сможет пройти все уровни, история результатов сохранится.`))
+                                userAction(u, "PATCH", { resetAttempts: true }, `Попытки ${u.name} сброшены`);
+                            }}
+                          >
+                            🔄
+                          </button>
                           <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u)} title="Сбросить пароль">
                             🔑
                           </button>
@@ -242,7 +256,8 @@ export default function AdminHome() {
             <div>
               <div style={{ fontWeight: 800 }}>Тест: вопросов и время</div>
               <div className="muted small">
-                Сколько вопросов в одном тесте и сколько минут на него — любые числа (вопросы делятся пополам: с вариантами и открытые). Уже
+                Сколько вопросов в одном тесте, сколько минут на него и сколько раз сотрудник может пройти каждый уровень (0 — без ограничений;
+                администраторов лимит не касается). Вопросы делятся пополам: с вариантами и открытые. Уже
                 начатые попытки не меняются. На каждом уровне в банке должно быть не меньше вопросов, чем в тесте.
               </div>
               {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
@@ -251,7 +266,9 @@ export default function AdminHome() {
               <input className="input" style={{ width: 90 }} type="number" min={1} value={qCount} onChange={(e) => setQCount(e.target.value)} />
               <span className="muted small">вопросов,</span>
               <input className="input" style={{ width: 90 }} type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-              <span className="muted small">мин</span>
+              <span className="muted small">мин,</span>
+              <input className="input" style={{ width: 80 }} type="number" min={0} value={attemptLimit} onChange={(e) => setAttemptLimit(e.target.value)} />
+              <span className="muted small">попыток на уровень</span>
               <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
                 Сохранить
               </button>

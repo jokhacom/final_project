@@ -24,7 +24,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (target.error) return target.error;
 
   const body = await req.json();
-  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string } = {};
+  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date } = {};
+  if (body.resetAttempts === true) data.attemptsResetAt = new Date(); // история сохраняется, лимит считается заново
   if (body.role !== undefined) {
     if (body.role !== "EMPLOYEE" && body.role !== "ADMIN") {
       return NextResponse.json({ error: "Роль: сотрудник или администратор" }, { status: 400 });

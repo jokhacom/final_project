@@ -6,6 +6,9 @@ import { buildResult, finishAttempt } from "@/lib/attempts";
 // Завершение теста: неотвеченные вопросы засчитываются как неверные,
 // начисляются конфеты, обновляются рейтинг, слабые темы и достижения.
 // Ответ содержит полный разбор каждого вопроса.
+// Здесь проверяются все открытые ответы теста (ИИ), поэтому даём запас по времени.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;

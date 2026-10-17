@@ -47,6 +47,7 @@ model User {
   passwordHash  String   // bcrypt-хеш пароля — обязателен для всех, включая суперадминистратора
   role          Role     @default(EMPLOYEE)
   createdAt     DateTime @default(now())
+  attemptsResetAt DateTime? // попытки, начатые до этого момента, не считаются в лимит (кнопка «Сбросить попытки»)
 
   attempts        TestAttempt[]
   achievements    UserAchievement[]
@@ -160,6 +161,7 @@ model Answer {
   spellingErrors Int        @default(0)
   grammarErrors  Int        @default(0)
   aiComment     String?
+  needsGrading  Boolean     @default(false) // открытый ответ сохранён, проверка — при завершении теста
   reviewedAt    DateTime?   // ответ проверен администратором вручную
   reviewedBy    String?     // id администратора, который проверил
   createdAt     DateTime    @default(now())
