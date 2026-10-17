@@ -1,41 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireAdmin } from "@/lib/session";
+import { validateQuestion } from "@/lib/questions";
 
-// Раздел 6-7 ТЗ можно выполнить и вручную, без ИИ: Суперадминистратор
-// сам создает вопросы через эту форму. Когда позже подключим ИИ-генерацию
-// из документов (/api/questions/generate), она будет писать в ту же таблицу
-// Question — обе формы создания вопросов совместимы и работают параллельно.
+// Ручное создание вопроса без ИИ. Пишет в ту же таблицу Question, что и
+// ИИ-генерация, — оба способа совместимы и работают параллельно.
 export async function POST(req: NextRequest) {
-  const { type, level, text, options, correctIndex, expectedKeywords } = await req.json();
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
 
-  if (!type || !level || !text) {
-    return NextResponse.json({ error: "Не заполнены обязательные поля" }, { status: 400 });
-  }
-  if (type === "MULTIPLE_CHOICE" && (!options || options.length < 2 || correctIndex === undefined)) {
-    return NextResponse.json({ error: "Для вопроса с вариантами нужны options и correctIndex" }, { status: 400 });
-  }
-  if (type === "OPEN" && (!expectedKeywords || expectedKeywords.length === 0)) {
-    return NextResponse.json({ error: "Для открытого вопроса нужны ключевые слова ожидаемого ответа" }, { status: 400 });
-  }
+  const checked = validateQuestion(await req.json());
+  if ("error" in checked) return NextResponse.json({ error: checked.error }, { status: 400 });
 
-  const question = await db.question.create({
-    data: {
-      type,
-      level,
-      text,
-      options: type === "MULTIPLE_CHOICE" ? options : undefined,
-      correctIndex: type === "MULTIPLE_CHOICE" ? correctIndex : undefined,
-      expectedKeywords: type === "OPEN" ? expectedKeywords : undefined,
-    },
-  });
-
+  const question = await db.question.create({ data: checked.data });
   return NextResponse.json({ question });
 }
 
+// Банк вопросов для админ-панели (фильтр по уровню).
 export async function GET(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
+
   const level = req.nextUrl.searchParams.get("level");
   const questions = await db.question.findMany({
     where: level ? { level: level as any } : undefined,
+    include: { sourceMaterial: { select: { title: true, version: true } }, topic: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
   return NextResponse.json({ questions });

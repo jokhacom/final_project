@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: { strategy: "jwt" },
   pages: {
-    signIn: "/login",
+    signIn: "/",
   },
   callbacks: {
     // Прокидываем роль и id в токен и в сессию, чтобы UI/эндпоинты могли

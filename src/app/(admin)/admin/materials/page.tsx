@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 
 type Material = {
   id: string;
@@ -13,30 +14,45 @@ type Material = {
   _count: { questions: number };
 };
 
-type Rule = { id: string; type: string; text: string; sourceQuote?: string | null };
-type Topic = { id: string; name: string; description?: string | null; rules: Rule[] };
+type Rule = { id: string; type: string; text: string; sourceQuote?: string | null; questions: { id: string }[] };
+type Topic = { id: string; name: string; description?: string | null; rules: Rule[]; questions: { id: string }[] };
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: "Загружен",
+  PENDING: "Загружен, ждёт анализа",
   ANALYZING: "ИИ читает документ...",
   PROCESSED: "База знаний готова",
   FAILED: "Ошибка",
 };
 
-// Раздел 2, 13, 14, 21 запроса: Super Admin загружает документ → жмёт
-// "Анализировать" → ИИ строит базу знаний (темы + правила) → админ видит
-// её и может по каждой теме сгенерировать вопросы. Полная трассировка
-// видна прямо здесь: документ → тема → правило → вопросы.
+const RULE_LABEL: Record<string, string> = {
+  REQUIRED: "✅ Обязательно",
+  FORBIDDEN: "⛔ Запрещено",
+  RECOMMENDED: "👍 Рекомендуется",
+  EXAMPLE_GOOD: "🟢 Хороший пример",
+  EXAMPLE_BAD: "🔴 Плохой пример",
+};
+
+const LEVELS = [
+  { id: "BEGINNER", label: "Новичок" },
+  { id: "MIDDLE", label: "Middle" },
+  { id: "PROFESSIONAL", label: "Professional" },
+];
+
+// Документ → «Анализировать» (ИИ строит темы и правила) → по каждой теме
+// генерация вопросов нужного уровня. Цепочка документ → тема → правило → вопросы видна здесь же.
 export default function MaterialsAdminPage() {
+  const { data: session } = useSession();
+  const isSuper = (session?.user as any)?.role === "SUPERADMIN";
   const [materials, setMaterials] = useState<Material[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [replaceId, setReplaceId] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
-  const [generatingTopicId, setGeneratingTopicId] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [topicsByMaterial, setTopicsByMaterial] = useState<Record<string, Topic[]>>({});
-  const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function loadMaterials() {
     const res = await fetch("/api/materials/upload");
@@ -44,171 +60,184 @@ export default function MaterialsAdminPage() {
     setMaterials(data.materials ?? []);
   }
 
+  async function loadTopics(materialId: string) {
+    const res = await fetch(`/api/materials/${materialId}/knowledge`);
+    const data = await res.json();
+    setTopicsByMaterial((prev) => ({ ...prev, [materialId]: data.topics ?? [] }));
+  }
+
   useEffect(() => {
     loadMaterials();
   }, []);
 
-  async function handleUpload() {
-    if (!file) return;
-    setUploading(true);
+  async function run(key: string, fn: () => Promise<void>) {
+    setBusy(key);
     setError(null);
+    setNotice(null);
     try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const handleUpload = () =>
+    run("upload", async () => {
+      if (!file) return;
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", title || file.name);
-      // TODO: подставлять реального userId суперадминистратора из сессии
-      formData.append("uploadedBy", "superadmin");
-
+      if (replaceId) formData.append("replaceMaterialId", replaceId);
       const res = await fetch("/api/materials/upload", { method: "POST", body: formData });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Ошибка загрузки");
-
       setFile(null);
       setTitle("");
+      setReplaceId("");
+      setNotice("Документ загружен. Теперь нажмите «Анализировать».");
       await loadMaterials();
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setUploading(false);
-    }
-  }
+    });
 
-  async function handleAnalyze(materialId: string) {
-    setAnalyzingId(materialId);
-    setError(null);
-    try {
+  const handleAnalyze = (materialId: string) =>
+    run(`analyze:${materialId}`, async () => {
       const res = await fetch(`/api/materials/${materialId}/analyze`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Ошибка анализа");
-
-      setTopicsByMaterial((prev) => ({ ...prev, [materialId]: data.topics }));
-      setExpandedMaterial(materialId);
+      const data = await res.json().catch(() => ({}));
       await loadMaterials();
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setAnalyzingId(null);
-    }
-  }
+      if (!res.ok) throw new Error(data.error ?? "Ошибка анализа");
+      await loadTopics(materialId);
+      setExpanded(materialId);
+    });
 
-  async function toggleExpand(materialId: string) {
-    if (expandedMaterial === materialId) {
-      setExpandedMaterial(null);
-      return;
-    }
-    if (!topicsByMaterial[materialId]) {
-      const res = await fetch(`/api/materials/${materialId}/knowledge`);
-      const data = await res.json();
-      setTopicsByMaterial((prev) => ({ ...prev, [materialId]: data.topics }));
-    }
-    setExpandedMaterial(materialId);
-  }
+  const toggleExpand = async (materialId: string) => {
+    if (expanded === materialId) return setExpanded(null);
+    if (!topicsByMaterial[materialId]) await loadTopics(materialId);
+    setExpanded(materialId);
+  };
 
-  async function handleGenerateForTopic(topicId: string, level: string) {
-    setGeneratingTopicId(topicId);
-    setError(null);
-    try {
+  const generate = (materialId: string, payload: Record<string, string>, level: string, key: string) =>
+    run(key, async () => {
       const res = await fetch("/api/questions/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, level, count: 10 }),
+        body: JSON.stringify({ materialId, ...payload, level, count: 10 }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Ошибка генерации");
-      alert(`Создано вопросов: ${data.questions.length}`);
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setGeneratingTopicId(null);
-    }
-  }
+      setNotice(`Создано вопросов: ${data.questions.length}. Проверить и поправить их можно в разделе «Вопросы».`);
+      await Promise.all([loadMaterials(), loadTopics(materialId)]);
+    });
 
   return (
-    <div style={{ maxWidth: 760, margin: "0 auto", padding: 24, fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700 }}>База знаний — материалы</h1>
-      <p style={{ color: "#666", fontSize: 14 }}>
-        Загрузите PDF/DOCX/TXT (Red Policy, Tone of Voice и т.д.) → нажмите «Анализировать» — ИИ прочитает
-        документ, выделит темы и правила → по каждой теме можно сгенерировать вопросы.
-      </p>
-
-      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginBottom: 24 }}>
-        <input
-          type="text"
-          placeholder="Название материала (необязательно)"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={{ width: "100%", padding: 8, marginBottom: 8, boxSizing: "border-box" }}
-        />
-        <input
-          type="file"
-          accept=".pdf,.docx,.txt"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          style={{ marginBottom: 8, display: "block" }}
-        />
-        <button
-          onClick={handleUpload}
-          disabled={!file || uploading}
-          style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#7C4DFF", color: "white", cursor: file ? "pointer" : "not-allowed" }}
-        >
-          {uploading ? "Загрузка..." : "Загрузить"}
-        </button>
-        {error && <div style={{ color: "crimson", marginTop: 8, fontSize: 13 }}>{error}</div>}
+    <div className="stack">
+      <div>
+        <h1>База знаний — материалы</h1>
+        <p className="muted small">
+          Загрузите PDF/DOCX/TXT (Редполитика, Tone of Voice и т.д.) → «Анализировать»: ИИ выделит темы и правила → по каждой теме сгенерируйте
+          вопросы нужного уровня.
+        </p>
       </div>
 
+      {isSuper && (
+        <div className="card stack">
+          <h2>Загрузить документ</h2>
+          <input className="input" placeholder="Название (необязательно)" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input type="file" accept=".pdf,.docx,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <label className="field">
+            Это новая версия существующего документа?
+            <select className="select" value={replaceId} onChange={(e) => setReplaceId(e.target.value)}>
+              <option value="">Нет, это новый документ</option>
+              {materials
+                .filter((m) => m.isActive)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    Заменить «{m.title}» (v{m.version})
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div>
+            <button className="btn btn-primary" onClick={handleUpload} disabled={!file || busy === "upload"}>
+              {busy === "upload" ? "Загрузка..." : "Загрузить"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && <div className="alert alert-error">{error}</div>}
+      {notice && <div className="alert alert-success">{notice}</div>}
+
+      {materials.length === 0 && <div className="card muted center">Материалов пока нет</div>}
+
       {materials.map((m) => (
-        <div key={m.id} style={{ border: "1px solid #eee", borderRadius: 12, padding: 16, marginBottom: 12, opacity: m.isActive ? 1 : 0.5 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div key={m.id} className="card" style={{ opacity: m.isActive ? 1 : 0.55 }}>
+          <div className="row between">
             <div>
-              <div style={{ fontWeight: 700 }}>
-                {m.title} {m.version > 1 && <span style={{ fontSize: 11, color: "#7C4DFF" }}>v{m.version}</span>}
-                {!m.isActive && <span style={{ fontSize: 11, color: "#999" }}> (заменён новой версией)</span>}
+              <div style={{ fontWeight: 900 }}>
+                {m.title} <span className="badge">v{m.version}</span>
+                {!m.isActive && <span className="muted small"> (заменён новой версией)</span>}
               </div>
-              <div style={{ fontSize: 12, color: "#888" }}>
+              <div className="muted small">
                 {m.type.toUpperCase()} · {STATUS_LABEL[m.status]} · вопросов: {m._count.questions}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {m.status !== "ANALYZING" && (
-                <button
-                  onClick={() => handleAnalyze(m.id)}
-                  disabled={analyzingId === m.id}
-                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #7C4DFF", background: "white", color: "#7C4DFF", fontSize: 12, cursor: "pointer" }}
-                >
-                  {analyzingId === m.id ? "Анализирую..." : m.status === "PROCESSED" ? "Переанализировать" : "Анализировать"}
+            <div className="row">
+              {isSuper && m.isActive && (
+                <button className="btn btn-ghost btn-sm" onClick={() => handleAnalyze(m.id)} disabled={!!busy || m.status === "ANALYZING"}>
+                  {busy === `analyze:${m.id}` ? "ИИ анализирует..." : m.status === "PROCESSED" ? "Переанализировать" : "Анализировать"}
                 </button>
               )}
               {m.status === "PROCESSED" && (
-                <button onClick={() => toggleExpand(m.id)} style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ccc", background: "white", fontSize: 12, cursor: "pointer" }}>
-                  {expandedMaterial === m.id ? "Скрыть" : "Открыть базу знаний"}
+                <button className="btn btn-ghost btn-sm" onClick={() => toggleExpand(m.id)}>
+                  {expanded === m.id ? "Скрыть" : "База знаний"}
                 </button>
               )}
             </div>
           </div>
 
-          {expandedMaterial === m.id && topicsByMaterial[m.id] && (
-            <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 12 }}>
+          {isSuper && m.isActive && m.status !== "PROCESSED" && m.status !== "ANALYZING" && (
+            <div className="row mt small">
+              <span className="muted">Или сразу вопросы по всему документу:</span>
+              {LEVELS.map((l) => (
+                <button key={l.id} className="btn btn-ghost btn-sm" disabled={!!busy} onClick={() => generate(m.id, {}, l.id, `doc:${m.id}:${l.id}`)}>
+                  {busy === `doc:${m.id}:${l.id}` ? "..." : `+ ${l.label}`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {expanded === m.id && topicsByMaterial[m.id] && (
+            <div className="stack mt" style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+              {topicsByMaterial[m.id].length === 0 && <div className="muted small">ИИ не нашёл тем в документе</div>}
               {topicsByMaterial[m.id].map((topic) => (
-                <div key={topic.id} style={{ marginBottom: 14, paddingLeft: 8, borderLeft: "3px solid #7C4DFF" }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{topic.name}</div>
-                  {topic.description && <div style={{ fontSize: 12, color: "#777", marginBottom: 4 }}>{topic.description}</div>}
-                  {topic.rules.map((r) => (
-                    <div key={r.id} style={{ fontSize: 12, marginTop: 4, color: "#444" }}>
-                      <strong>[{r.type}]</strong> {r.text}
-                      {r.sourceQuote && <div style={{ color: "#999", fontStyle: "italic" }}>«{r.sourceQuote}»</div>}
-                    </div>
-                  ))}
-                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                    {["BEGINNER", "MIDDLE", "PROFESSIONAL"].map((level) => (
-                      <button
-                        key={level}
-                        onClick={() => handleGenerateForTopic(topic.id, level)}
-                        disabled={generatingTopicId === topic.id}
-                        style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #00E5A0", background: "white", color: "#00A876", fontSize: 11, cursor: "pointer" }}
-                      >
-                        {generatingTopicId === topic.id ? "..." : `+ вопросы ${level}`}
-                      </button>
+                <div key={topic.id} style={{ paddingLeft: 12, borderLeft: "4px solid var(--accent)" }}>
+                  <div style={{ fontWeight: 900 }}>
+                    {topic.name} <span className="badge">вопросов: {topic.questions.length}</span>
+                  </div>
+                  {topic.description && <div className="muted small">{topic.description}</div>}
+                  <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+                    {topic.rules.map((r) => (
+                      <div key={r.id} className="small">
+                        <strong>{RULE_LABEL[r.type] ?? r.type}:</strong> {r.text}
+                        {r.sourceQuote && <div className="muted" style={{ fontStyle: "italic" }}>«{r.sourceQuote}»</div>}
+                      </div>
                     ))}
                   </div>
+                  {isSuper && m.isActive && (
+                    <div className="row" style={{ marginTop: 8 }}>
+                      {LEVELS.map((l) => (
+                        <button
+                          key={l.id}
+                          className="btn btn-ghost btn-sm"
+                          disabled={!!busy}
+                          onClick={() => generate(m.id, { topicId: topic.id }, l.id, `topic:${topic.id}:${l.id}`)}
+                        >
+                          {busy === `topic:${topic.id}:${l.id}` ? "Генерируем..." : `+ вопросы ${l.label}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

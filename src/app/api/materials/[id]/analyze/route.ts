@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireSuperadmin } from "@/lib/session";
 import { aiProvider } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
 
@@ -10,6 +11,8 @@ import { truncateForAI } from "@/lib/parsing/extractText";
 // (POST /api/questions/generate с topicId), чтобы Super Admin мог сначала
 // проверить/поправить извлечённые темы и правила перед генерацией заданий.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await requireSuperadmin();
+  if (admin instanceof NextResponse) return admin;
   const { id } = await params;
   const material = await db.material.findUnique({ where: { id } });
   if (!material) {
