@@ -69,7 +69,7 @@ export default function AdminHome() {
     setMinutesSaved(null);
     for (const [key, value] of [
       ["test_duration_min", minutes.trim()],
-      ["test_question_count", qCount],
+      ["test_question_count", qCount.trim()],
     ]) {
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -244,20 +244,15 @@ export default function AdminHome() {
             <div>
               <div style={{ fontWeight: 800 }}>Тест: вопросов и время</div>
               <div className="muted small">
-                Сколько вопросов в одном тесте (половина с вариантами, половина открытых) и сколько минут на него (1–120). Уже начатые попытки не
-                меняются. Для 15 и 20 вопросов на каждом уровне нужно соответственно больше вопросов в банке.
+                Сколько вопросов в одном тесте и сколько минут на него — любые числа (вопросы делятся пополам: с вариантами и открытые). Уже
+                начатые попытки не меняются. На каждом уровне в банке должно быть не меньше вопросов, чем в тесте.
               </div>
               {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
             </div>
             <div className="row">
-              <select className="select" style={{ width: "auto" }} value={qCount} onChange={(e) => setQCount(e.target.value)}>
-                {["10", "15", "20"].map((v) => (
-                  <option key={v} value={v}>
-                    {v} вопросов
-                  </option>
-                ))}
-              </select>
-              <input className="input" style={{ width: 90 }} type="number" min={1} max={120} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+              <input className="input" style={{ width: 90 }} type="number" min={1} value={qCount} onChange={(e) => setQCount(e.target.value)} />
+              <span className="muted small">вопросов,</span>
+              <input className="input" style={{ width: 90 }} type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
               <span className="muted small">мин</span>
               <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
                 Сохранить

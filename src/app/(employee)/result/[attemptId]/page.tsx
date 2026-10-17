@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { levelInfo } from "@/lib/levels";
 import type { AttemptResult, ReviewItem } from "@/lib/types";
+import { formatPenalty } from "@/lib/scoring";
 
 export default function ResultPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
@@ -94,21 +95,21 @@ export default function ResultPage() {
       <h2 className="mt-lg">Разбор ответов</h2>
       <div className="stack">
         {data.review.map((r) => (
-          <ReviewCard key={r.questionId} item={r} />
+          <ReviewCard key={r.questionId} item={r} penalty={formatPenalty(data.total)} />
         ))}
       </div>
     </main>
   );
 }
 
-function ReviewCard({ item: r }: { item: ReviewItem }) {
+function ReviewCard({ item: r, penalty }: { item: ReviewItem; penalty: string }) {
   const errors = r.spellingErrors + r.grammarErrors;
   return (
     <div className={`card review-item ${r.isCorrect ? "ok" : "bad"}`}>
       <div className="row between">
         <span className="muted small">Вопрос {r.n}</span>
         <span style={{ fontWeight: 900, color: r.isCorrect ? "var(--success)" : "var(--danger)" }}>
-          {r.isCorrect ? "✅ Верно" : "❌ Неверно · −5 🍬"}
+          {r.isCorrect ? "✅ Верно" : `❌ Неверно · −${penalty} 🍬`}
           {r.reviewed && <span className="muted small" style={{ fontWeight: 600 }}> · проверено</span>}
         </span>
       </div>

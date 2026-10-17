@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
   if (!isLevel(level) || level === "EXAM") {
     return NextResponse.json({ error: "Укажите уровень: BEGINNER, MIDDLE или PROFESSIONAL" }, { status: 400 });
   }
-  const count = Math.min(Math.max(Number(body.count) || 10, 1), 20);
+  // Один запрос — до 10 вопросов, чтобы ответ ИИ не обрезался; больше браузер запрашивает порциями.
+  const count = Math.min(Math.max(Number(body.count) || 10, 1), 10);
 
   // Материал можно не передавать — он определяется по теме или правилу.
   const topic = topicId ? await db.topic.findUnique({ where: { id: topicId }, include: { rules: true } }) : null;
