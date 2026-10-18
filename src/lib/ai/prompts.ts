@@ -169,16 +169,18 @@ ${rulesText}
 
 Создай ${count} элементов игры «Можно или нельзя?» (kind: TRUE_FALSE): короткая реплика сотрудника клиенту (1–2 предложения, как в реальном чате), isCorrect — можно ли так ответить по правилам. Примерно половина допустимых, половина с нарушением правила.
 И ${count} карточек (kind: FLASHCARD): prompt — короткая ситуация с клиентом, answer — как правильно поступить или ответить (1–2 предложения).
+И ${count} заданий «Найди и исправь ошибку» (kind: FIX_ERROR): prompt — сообщение сотрудника клиенту (1–3 предложения, как в чате) с одним-двумя нарушениями правил, answer — это же сообщение, написанное правильно.
 У каждого элемента explanation — одно предложение, почему так, со ссылкой на правило.
 ${languageRule(language)}
 Ответь строго JSON-массивом без markdown:
 [{"kind":"TRUE_FALSE","prompt":"...","isCorrect":false,"explanation":"..."},
- {"kind":"FLASHCARD","prompt":"...","answer":"...","explanation":"..."}]`;
-      const list = parseJson<GeneratedGameItem[]>(await complete(prompt, 6000, { fast: true }));
+ {"kind":"FLASHCARD","prompt":"...","answer":"...","explanation":"..."},
+ {"kind":"FIX_ERROR","prompt":"...","answer":"...","explanation":"..."}]`;
+      const list = parseJson<GeneratedGameItem[]>(await complete(prompt, 8000, { fast: true }));
       return (Array.isArray(list) ? list : []).filter(
         (g) =>
           g?.prompt &&
-          ((g.kind === "TRUE_FALSE" && typeof g.isCorrect === "boolean") || (g.kind === "FLASHCARD" && !!g.answer))
+          ((g.kind === "TRUE_FALSE" && typeof g.isCorrect === "boolean") || ((g.kind === "FLASHCARD" || g.kind === "FIX_ERROR") && !!g.answer))
       );
     },
 

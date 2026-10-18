@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdmin, requireAdmin, requireUser } from "@/lib/session";
-import { validateGameItem } from "@/lib/games";
+import { isGameKind, validateGameItem } from "@/lib/games";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -12,7 +12,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// ?kind=TRUE_FALSE|FLASHCARD — раунд игры (до 12 случайных элементов).
+// ?kind=TRUE_FALSE|FLASHCARD|FIX_ERROR — раунд игры (до 12 случайных элементов).
 // ?all=1 — полный список для админ-панели.
 export async function GET(req: NextRequest) {
   const user = await requireUser();
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const kind = req.nextUrl.searchParams.get("kind");
   const all = req.nextUrl.searchParams.get("all") === "1" && isAdmin(user);
-  const where = kind === "TRUE_FALSE" || kind === "FLASHCARD" ? { kind: kind as "TRUE_FALSE" | "FLASHCARD" } : {};
+  const where = isGameKind(kind) ? { kind } : {};
 
   const items = await db.gameItem.findMany({
     where,

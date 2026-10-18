@@ -35,7 +35,7 @@ export interface ExtractedRule {
 
 // Элемент обучающей игры (см. GameItem в schema.prisma).
 export interface GeneratedGameItem {
-  kind: "TRUE_FALSE" | "FLASHCARD";
+  kind: "TRUE_FALSE" | "FLASHCARD" | "FIX_ERROR";
   prompt: string;
   answer?: string;
   isCorrect?: boolean;

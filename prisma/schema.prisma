@@ -231,14 +231,16 @@ model Presentation {
 enum GameKind {
   TRUE_FALSE // «Можно или нельзя?»: фраза сотрудника клиенту — допустима или нет
   FLASHCARD  // «Карточки»: ситуация → правильное поведение
+  FIX_ERROR  // «Найди и исправь ошибку»: сообщение или скриншот чата → правильный вариант
 }
 
 // Элемент обучающей игры. Создаётся ИИ по правилам темы или вручную администратором.
 model GameItem {
   id          String   @id @default(cuid())
   kind        GameKind
-  prompt      String   // фраза (TRUE_FALSE) или ситуация (FLASHCARD)
-  answer      String?  // обратная сторона карточки (FLASHCARD)
+  prompt      String   // фраза (TRUE_FALSE), ситуация (FLASHCARD) или сообщение с ошибкой (FIX_ERROR)
+  answer      String?  // обратная сторона карточки (FLASHCARD) или правильный вариант (FIX_ERROR)
+  image       String?  // скриншот чата (FIX_ERROR), data URL, сжимается в браузере
   isCorrect   Boolean? // можно ли так сказать (TRUE_FALSE)
   explanation String?  // почему — со ссылкой на правило
   topicId     String?

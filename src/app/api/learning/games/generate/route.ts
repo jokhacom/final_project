@@ -7,7 +7,7 @@ import { validateGameItem } from "@/lib/games";
 
 export const maxDuration = 60;
 
-// ИИ создаёт элементы обеих игр по правилам одной темы.
+// ИИ создаёт элементы всех трёх игр по правилам одной темы.
 export async function POST(req: NextRequest) {
   const admin = await requireSuperadmin();
   if (admin instanceof NextResponse) return admin;

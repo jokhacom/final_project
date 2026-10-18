@@ -222,4 +222,4 @@ button.level-card { border: 1px solid var(--border); }
 .level-card.static { cursor: default; }
 .level-card.static:hover { transform: none; }
 .grid-land { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.grid-land > .card + .card { margin-top: 0; }
+.grid > .card + .card { margin-top: 0; } /* в сетке отступ задаёт gap */

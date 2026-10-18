@@ -8,7 +8,7 @@ const TYPES = ["MULTIPLE_CHOICE", "OPEN", "FIND_ERROR", "FIX_MESSAGE", "BEST_RES
 // поэтому 2 МБ с запасом хватает и укладывается в лимит запроса Vercel.
 const MAX_IMAGE_LENGTH = 2_000_000;
 
-function parseImage(value: unknown): { image: string | null } | { error: string } {
+export function parseImage(value: unknown): { image: string | null } | { error: string } {
   if (value == null || value === "") return { image: null };
   const image = String(value);
   if (!/^data:image\/(png|jpeg|webp|gif);base64,/.test(image)) return { error: "Скриншот должен быть картинкой PNG, JPG, WEBP или GIF" };
