@@ -1,4 +1,4 @@
-import type { AIProvider, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedQuestion, Level } from "./provider";
+import type { AIProvider, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, Level } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
@@ -168,19 +168,38 @@ ${QUESTION_FORMAT}`;
 ${rulesText}
 
 Создай ${count} элементов игры «Можно или нельзя?» (kind: TRUE_FALSE): короткая реплика сотрудника клиенту (1–2 предложения, как в реальном чате), isCorrect — можно ли так ответить по правилам. Примерно половина допустимых, половина с нарушением правила.
-И ${count} карточек (kind: FLASHCARD): prompt — короткая ситуация с клиентом, answer — как правильно поступить или ответить (1–2 предложения).
 И ${count} заданий «Найди и исправь ошибку» (kind: FIX_ERROR): prompt — сообщение сотрудника клиенту (1–3 предложения, как в чате) с одним-двумя нарушениями правил, answer — это же сообщение, написанное правильно.
 У каждого элемента explanation — одно предложение, почему так, со ссылкой на правило.
 ${languageRule(language)}
 Ответь строго JSON-массивом без markdown:
 [{"kind":"TRUE_FALSE","prompt":"...","isCorrect":false,"explanation":"..."},
- {"kind":"FLASHCARD","prompt":"...","answer":"...","explanation":"..."},
  {"kind":"FIX_ERROR","prompt":"...","answer":"...","explanation":"..."}]`;
       const list = parseJson<GeneratedGameItem[]>(await complete(prompt, 8000, { fast: true }));
       return (Array.isArray(list) ? list : []).filter(
         (g) =>
           g?.prompt &&
-          ((g.kind === "TRUE_FALSE" && typeof g.isCorrect === "boolean") || ((g.kind === "FLASHCARD" || g.kind === "FIX_ERROR") && !!g.answer))
+          ((g.kind === "TRUE_FALSE" && typeof g.isCorrect === "boolean") || (g.kind === "FIX_ERROR" && !!g.answer))
+      );
+    },
+
+    async generateLanguageItems(language, count, avoid) {
+      const ru = language === "ru";
+      const topics = ru
+        ? "предлоги и падежи (в течение, по приезде, согласно чему), слитное/раздельное/дефисное написание (также/так же, вследствие, по-русски, кто-нибудь), НЕ и НИ, -тся/-ться, суффиксы (-ик/-ек, -чик/-щик, -н-/-нн-), приставки (без-/бес-, пре-/при-), окончания и формы слов, орфография частых слов из переписки с клиентом, похожие слова (предоставить/представить, надеть/одеть), пунктуация (обращение, вводные слова), ударение"
+        : "tutuq belgisi (maʼlumot, taʼlim), oʻ va gʻ harflari, x va h (xizmat, hisob), qoʻshimchalar va tovush oʻzgarishi (yurak — yuragi, qishloq — qishlogʻi, -ga/-ka/-qa, -gan/-kan/-qan), qoʻshib yozish (qabulxona, -mi, -dir), ajratib yozish (hech kim, har bir, sotib ol), chiziqcha bilan yozish (ota-ona, tez-tez, 2024-yil), bosh harf (oy nomlari kichik harf bilan), qoʻsh harflar (murojaat, tashakkur)";
+      const prompt = `Ты составляешь короткие вопросы для игры «Грамотность» для сотрудников службы поддержки. На каждый вопрос даётся 10 секунд, поэтому вопрос и варианты — очень короткие.
+Язык игры: ${ru ? "русский язык (нормы современного русского литературного языка)" : UZ_ORTHOGRAPHY.replace("узбекском языке", "узбекский язык")}.
+${ru ? "Всё (вопрос, варианты, раздел, пояснение) пиши по-русски." : "Всё (вопрос, варианты, раздел, пояснение) пиши на узбекском языке латиницей. Проверяй каждое слово по правилам «Oʻzbek tilining asosiy imlo qoidalari» и словарю imlo.uz; если не уверен в норме — не используй это слово."}
+Разделы: ${topics}.
+Создай ${count} вопросов из разных разделов. У каждого: category — раздел, prompt — вопрос (например «${ru ? "Как правильно?" : "Qaysi biri toʻgʻri yozilgan?"}» или фраза с пропуском ___), options — 2–4 варианта, ровно один правильный, correctIndex — номер правильного (с 0), explanation — одно короткое предложение с правилом.
+Только бесспорные нормы, без спорных и устаревших вариантов. Слова и фразы — из реальной переписки с клиентами (платёж, заявка, справка, обращение).
+Не повторяй эти вопросы:
+${avoid.join("\n") || "—"}
+Ответь строго JSON-массивом без markdown:
+[{"category":"...","prompt":"...","options":["...","..."],"correctIndex":0,"explanation":"..."}]`;
+      const list = parseJson<GeneratedLanguageItem[]>(await complete(prompt, 6000, { fast: true }));
+      return (Array.isArray(list) ? list : []).filter(
+        (q) => q?.prompt && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length
       );
     },
 

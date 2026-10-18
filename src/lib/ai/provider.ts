@@ -35,10 +35,19 @@ export interface ExtractedRule {
 
 // Элемент обучающей игры (см. GameItem в schema.prisma).
 export interface GeneratedGameItem {
-  kind: "TRUE_FALSE" | "FLASHCARD" | "FIX_ERROR";
+  kind: "TRUE_FALSE" | "FIX_ERROR";
   prompt: string;
   answer?: string;
   isCorrect?: boolean;
+  explanation?: string;
+}
+
+// Вопрос игры «Грамотность» (см. GameItem с kind LANGUAGE).
+export interface GeneratedLanguageItem {
+  category: string;
+  prompt: string;
+  options: string[];
+  correctIndex: number;
   explanation?: string;
 }
 
@@ -62,8 +71,11 @@ export interface AIProvider {
   // ruleContext — подсказка конкретного правила при перегенерации одного вопроса.
   generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
 
-  // Элементы игр по правилам темы: «Можно или нельзя?» и «Карточки».
+  // Элементы игр по правилам темы: «Можно или нельзя?» и «Найди и исправь ошибку».
   generateGameItems(topicName: string, rules: ExtractedRule[], count: number, language?: ContentLanguage): Promise<GeneratedGameItem[]>;
+
+  // Вопросы «Грамотности» по русскому или узбекскому языку (не по документу). avoid — уже существующие, чтобы не повторяться.
+  generateLanguageItems(language: "ru" | "uz", count: number, avoid: string[]): Promise<GeneratedLanguageItem[]>;
 
   // Проверка СТРОГО по materialContext (правило + цитата, иначе весь текст материала).
   gradeOpenAnswer(question: string, expectedKeywords: string[], answer: string, materialContext: string | null): Promise<GradeResult>;

@@ -223,3 +223,10 @@ button.level-card { border: 1px solid var(--border); }
 .level-card.static:hover { transform: none; }
 .grid-land { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .grid > .card + .card { margin-top: 0; } /* в сетке отступ задаёт gap */
+
+/* «Грамотность»: полоска оставшегося времени */
+.lang-timebar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.lang-timebar > div { height: 100%; background: var(--gradient); transition: width 1s linear; }
+.option.correct { border-color: var(--success); background: var(--success-bg); }
+.option.wrong { border-color: var(--danger); background: var(--danger-bg); }
+.option:disabled { cursor: default; }

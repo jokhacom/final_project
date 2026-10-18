@@ -230,8 +230,9 @@ model Presentation {
 
 enum GameKind {
   TRUE_FALSE // «Можно или нельзя?»: фраза сотрудника клиенту — допустима или нет
-  FLASHCARD  // «Карточки»: ситуация → правильное поведение
+  FLASHCARD  // «Карточки» — больше не показываются, заменены игрой «Грамотность»
   FIX_ERROR  // «Найди и исправь ошибку»: сообщение или скриншот чата → правильный вариант
+  LANGUAGE   // «Грамотность»: русский или узбекский язык, вопрос с вариантами, 10 секунд на ответ
 }
 
 // Элемент обучающей игры. Создаётся ИИ по правилам темы или вручную администратором.
@@ -241,6 +242,10 @@ model GameItem {
   prompt      String   // фраза (TRUE_FALSE), ситуация (FLASHCARD) или сообщение с ошибкой (FIX_ERROR)
   answer      String?  // обратная сторона карточки (FLASHCARD) или правильный вариант (FIX_ERROR)
   image       String?  // скриншот чата (FIX_ERROR), data URL, сжимается в браузере
+  options     Json?    // варианты ответа (LANGUAGE)
+  correctIndex Int?    // номер правильного варианта (LANGUAGE)
+  language    String?  // "ru" или "uz" (LANGUAGE)
+  category    String?  // раздел: предлоги, суффиксы, слитно/раздельно... (LANGUAGE)
   isCorrect   Boolean? // можно ли так сказать (TRUE_FALSE)
   explanation String?  // почему — со ссылкой на правило
   topicId     String?
