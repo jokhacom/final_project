@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
   if (!features.AI_CONFIGURED) return NextResponse.json({ error: AI_NOT_CONFIGURED_MESSAGE }, { status: 503 });
   const body = await req.json();
   const { topicId, ruleId, level } = body;
-  if (!isLevel(level) || level === "EXAM") {
-    return NextResponse.json({ error: "Укажите уровень: BEGINNER, MIDDLE или PROFESSIONAL" }, { status: 400 });
+  if (!isLevel(level)) {
+    return NextResponse.json({ error: "Укажите уровень: BEGINNER, MIDDLE, PROFESSIONAL или EXAM" }, { status: 400 });
   }
   // Один запрос — до 10 вопросов, чтобы ответ ИИ не обрезался; больше браузер запрашивает порциями.
   const count = Math.min(Math.max(Number(body.count) || 10, 1), 10);

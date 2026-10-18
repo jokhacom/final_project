@@ -49,6 +49,7 @@ const LEVELS = [
   { id: "BEGINNER", label: "Новичок" },
   { id: "MIDDLE", label: "Middle" },
   { id: "PROFESSIONAL", label: "Professional" },
+  { id: "EXAM", label: "Экзамен" },
 ];
 
 // Примерно 2000 символов — одна страница текста.
@@ -176,11 +177,12 @@ export default function MaterialsAdminPage() {
   }
 
   // Вопросы по всем темам для трёх уровней. Темы, где вопросы этого уровня уже есть, пропускаются.
+  // Итоговый экзамен — отдельное задание: его вопросы создаются только по кнопке «+ Экзамен» у темы.
   async function generateAll(materialId: string) {
     const topics = await loadTopics(materialId);
     if (perTopic === 0) return { created: 0, failed: 0, jobs: 0 };
     const jobs = topics.flatMap((t) =>
-      LEVELS.filter((l) => !t.questions.some((q) => q.level === l.id)).map((l) => ({ topic: t, level: l }))
+      LEVELS.filter((l) => l.id !== "EXAM" && !t.questions.some((q) => q.level === l.id)).map((l) => ({ topic: t, level: l }))
     );
     let created = 0;
     let failed = 0;

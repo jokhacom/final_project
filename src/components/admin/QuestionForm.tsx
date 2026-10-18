@@ -23,7 +23,7 @@ export const TYPE_LABEL: Record<string, string> = {
   FIND_ERROR: "Найди ошибку",
   FIX_MESSAGE: "Исправь сообщение",
 };
-export const LEVEL_LABEL: Record<string, string> = { BEGINNER: "Новичок", MIDDLE: "Middle", PROFESSIONAL: "Professional" };
+export const LEVEL_LABEL: Record<string, string> = { BEGINNER: "Новичок", MIDDLE: "Middle", PROFESSIONAL: "Professional", EXAM: "Итоговый экзамен" };
 const CHOICE = ["MULTIPLE_CHOICE", "BEST_RESPONSE"];
 
 export const emptyDraft = (level = "BEGINNER"): QuestionDraft => ({

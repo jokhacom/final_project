@@ -9,7 +9,8 @@ export const activeQuestionsFilter = {
   OR: [{ sourceMaterialId: null }, { sourceMaterial: { isActive: true } }],
 };
 
-const BASE_LEVELS = ["BEGINNER", "MIDDLE", "PROFESSIONAL"] as const;
+// Итоговый экзамен считается так же — по его собственным вопросам.
+const BASE_LEVELS = ["BEGINNER", "MIDDLE", "PROFESSIONAL", "EXAM"] as const;
 // Сколько активных вопросов на каждом уровне. Тест открыт, как только есть хотя бы
 // один вопрос: в нём будет min(N, сколько есть) вопросов, где N — настройка
 // «вопросов в тесте» (по умолчанию 10).
@@ -30,17 +31,5 @@ export async function levelReadiness() {
     return { id: level, choice, open, total, ready: total > 0, full: total >= n, inTest: Math.min(total, n), balanced: choice >= half && open >= half, needed: n };
   });
 
-  const exam = {
-    id: "EXAM" as const,
-    choice: levels.reduce((s, l) => s + l.choice, 0),
-    open: levels.reduce((s, l) => s + l.open, 0),
-    total: levels.reduce((s, l) => s + l.total, 0),
-    ready: levels.some((l) => l.total > 0),
-    full: levels.reduce((s, l) => s + l.total, 0) >= n,
-    inTest: Math.min(levels.reduce((s, l) => s + l.total, 0), n),
-    needed: n,
-    balanced: levels.every((l) => l.balanced),
-  };
-
-  return [...levels, exam];
+  return levels;
 }
