@@ -20,13 +20,6 @@ export async function getQuestionCount(): Promise<number> {
   return isValidQuestionCount(n) ? n : DEFAULT_QUESTION_COUNT;
 }
 
-// Сколько вопросов каждого уровня берёт итоговый экзамен: 30% / 30% / 40%.
-export function examSplit(total: number) {
-  const b = Math.round(total * 0.3);
-  const m = Math.round(total * 0.3);
-  return { BEGINNER: b, MIDDLE: m, PROFESSIONAL: total - b - m };
-}
-
 // Сколько раз сотрудник может пройти каждый уровень (Setting "test_attempt_limit").
 // 0 — без ограничений. Администраторов лимит не касается.
 export async function getAttemptLimit(): Promise<number> {

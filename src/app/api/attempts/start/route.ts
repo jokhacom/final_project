@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel } from "@/lib/levels";
-import { attemptsLeft, examSplit, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
+import { attemptsLeft, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
 
 function sample<T>(arr: T[], n: number): T[] {
@@ -28,8 +28,8 @@ function pick(pool: Q[], choice: number, open: number): Q[] {
   return [...a, ...b, ...rest.slice(0, Math.max(0, choice + open - a.length - b.length))];
 }
 
-// Новичок / Middle / Professional — N вопросов уровня (по умолчанию 10: 5 с вариантами + 5 открытых).
-// Итоговый экзамен — 30% Новичок + 30% Middle + 40% Professional (для 10 вопросов: 3 + 3 + 4).
+// Любой уровень (Новичок / Middle / Professional / Итоговый экзамен) — N вопросов этого
+// уровня (по умолчанию 10: 5 с вариантами + 5 открытых).
 // Каждая попытка — новая случайная выборка из активных материалов.
 export async function POST(req: NextRequest) {
   const user = await requireUser();
@@ -49,26 +49,10 @@ export async function POST(req: NextRequest) {
   const select = { id: true, type: true, level: true };
 
   const n = await getQuestionCount();
-  let picked: Q[];
-  if (level === "EXAM") {
-    const [beginner, middle, professional] = await Promise.all(
-      (["BEGINNER", "MIDDLE", "PROFESSIONAL"] as const).map((l) => db.question.findMany({ where: { level: l, ...activeOnly }, select }))
-    );
-    // По каждому уровню примерно поровну вопросов с вариантами и открытых; у Новичка больше открытых, у Middle — с вариантами.
-    const split = examSplit(n);
-    picked = [
-      ...pick(beginner, Math.floor(split.BEGINNER / 2), Math.ceil(split.BEGINNER / 2)),
-      ...pick(middle, Math.ceil(split.MIDDLE / 2), Math.floor(split.MIDDLE / 2)),
-      ...pick(professional, Math.ceil(split.PROFESSIONAL / 2), Math.floor(split.PROFESSIONAL / 2)),
-    ];
-    // Если на каком-то уровне вопросов мало — добираем вопросами других уровней.
-    const taken = new Set(picked.map((q) => q.id));
-    const rest = sample([...beginner, ...middle, ...professional].filter((q) => !taken.has(q.id)), Infinity);
-    picked = [...picked, ...rest.slice(0, Math.max(0, n - picked.length))];
-  } else {
-    const pool = await db.question.findMany({ where: { level, ...activeOnly }, select });
-    picked = pick(pool, Math.ceil(n / 2), Math.floor(n / 2));
-  }
+  // Каждый уровень, включая итоговый экзамен, — только свои вопросы.
+  // Экзамен — отдельное задание: администратор сам добавляет для него вопросы.
+  const pool = await db.question.findMany({ where: { level, ...activeOnly }, select });
+  const picked = pick(pool, Math.ceil(n / 2), Math.floor(n / 2));
 
   // В тесте — сколько есть, но не больше настройки «вопросов в тесте».
   if (picked.length === 0) {

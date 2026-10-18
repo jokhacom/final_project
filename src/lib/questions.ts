@@ -21,7 +21,7 @@ export function validateQuestion(q: any):
   | { error: string }
   | { data: Prisma.QuestionUncheckedCreateInput } {
   if (!TYPES.includes(q.type)) return { error: "Неизвестный тип вопроса" };
-  if (!isLevel(q.level) || q.level === "EXAM") return { error: "Уровень: BEGINNER, MIDDLE или PROFESSIONAL" };
+  if (!isLevel(q.level)) return { error: "Уровень: BEGINNER, MIDDLE, PROFESSIONAL или EXAM" };
   const text = String(q.text ?? "").trim();
   if (!text) return { error: "Введите текст вопроса" };
   const explanation = q.explanation ? String(q.explanation).trim() || null : null;

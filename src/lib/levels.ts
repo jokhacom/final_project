@@ -5,7 +5,7 @@ export const LEVELS: { id: LevelId; label: string; icon: string; color: string; 
   { id: "BEGINNER", label: "Новичок", icon: "🟢", color: "#00E5A0", description: "Базовые правила общения с клиентом" },
   { id: "MIDDLE", label: "Middle", icon: "🟡", color: "#FFC93C", description: "Типичные ситуации и тон ответа" },
   { id: "PROFESSIONAL", label: "Professional", icon: "🔴", color: "#FF6FA5", description: "Сложные и конфликтные кейсы" },
-  { id: "EXAM", label: "Итоговый экзамен (KPI)", icon: "🎓", color: "#7C4DFF", description: "Вопросы всех уровней" },
+  { id: "EXAM", label: "Итоговый экзамен (KPI)", icon: "🎓", color: "#7C4DFF", description: "Отдельное итоговое задание" },
 ];
 
 export const levelInfo = (id: string) => LEVELS.find((l) => l.id === id) ?? LEVELS[0];

@@ -29,6 +29,9 @@ const LEVELS: Record<string, string> = {
   мидл: "MIDDLE",
   professional: "PROFESSIONAL",
   профессионал: "PROFESSIONAL",
+  экзамен: "EXAM",
+  "итоговый экзамен": "EXAM",
+  exam: "EXAM",
 };
 
 const TYPES: Record<string, string> = {

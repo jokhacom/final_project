@@ -53,7 +53,6 @@ export default function AuthPage() {
       <div className="center" style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 64 }}>🍭</div>
         <h1>Тренажер знаний ГЦО</h1>
-        <p className="muted">Проверьте знание Редполитики и Tone of Voice, соберите 100 🍬 и получите сертификат</p>
       </div>
 
       <form className="card stack" onSubmit={handleSubmit}>
