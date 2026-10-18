@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 
 type Presentation = { id: string; title: string; description: string | null };
-type Item = { id: string; kind: "TRUE_FALSE" | "FLASHCARD"; prompt: string; answer: string | null; isCorrect: boolean | null; explanation: string | null };
+type Kind = "TRUE_FALSE" | "FLASHCARD" | "FIX_ERROR";
+type Item = { id: string; kind: Kind; prompt: string; answer: string | null; isCorrect: boolean | null; explanation: string | null; image: string | null };
 
-// Обучение: презентации для изучения и две игры для закрепления правил.
+// Обучение: презентации для изучения и три игры для закрепления правил.
 export default function LearnPage() {
   const [presentations, setPresentations] = useState<Presentation[] | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [viewing, setViewing] = useState<Presentation | null>(null);
-  const [game, setGame] = useState<"TRUE_FALSE" | "FLASHCARD" | null>(null);
+  const [game, setGame] = useState<Kind | null>(null);
 
   useEffect(() => {
     fetch("/api/learning/presentations").then((r) => r.json()).then((d) => setPresentations(d.items ?? []));
@@ -37,6 +38,12 @@ export default function LearnPage() {
           <div className="level-title">Карточки</div>
           <div className="muted">Ситуация с клиентом — вспомните, как правильно, и переверните карточку.</div>
           <div className="level-meta">{counts.FLASHCARD ? "12 карточек за раунд" : "Скоро — карточки готовятся"}</div>
+        </button>
+        <button className="card level-card" style={{ ["--level" as any]: "#FF6FA5", textAlign: "left", font: "inherit" }} disabled={!counts.FIX_ERROR} onClick={() => setGame("FIX_ERROR")}>
+          <div style={{ fontSize: 34 }}>🔍✏️</div>
+          <div className="level-title">Найди и исправь ошибку</div>
+          <div className="muted">Сообщение или скриншот чата с ошибкой — напишите, как правильно, и сравните с образцом.</div>
+          <div className="level-meta">{counts.FIX_ERROR ? `${Math.min(counts.FIX_ERROR, 12)} заданий за раунд` : "Скоро — задания готовятся"}</div>
         </button>
       </div>
 
@@ -79,11 +86,12 @@ export default function LearnPage() {
   );
 }
 
-function Game({ kind, onExit }: { kind: "TRUE_FALSE" | "FLASHCARD"; onExit: () => void }) {
+function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<boolean | null>(null); // выбор в «Можно или нельзя?»
   const [flipped, setFlipped] = useState(false);
+  const [draft, setDraft] = useState(""); // исправленный вариант в «Найди и исправь ошибку»
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(0);
 
@@ -94,6 +102,7 @@ function Game({ kind, onExit }: { kind: "TRUE_FALSE" | "FLASHCARD"; onExit: () =
     setScore(0);
     setPicked(null);
     setFlipped(false);
+    setDraft("");
   }, [kind, round]);
 
   if (!items) return <main className="container narrow"><div className="card center" style={{ padding: 40 }}><div className="spinner" /></div></main>;
@@ -104,13 +113,15 @@ function Game({ kind, onExit }: { kind: "TRUE_FALSE" | "FLASHCARD"; onExit: () =
     setI(i + 1);
     setPicked(null);
     setFlipped(false);
+    setDraft("");
   };
+  const scored = kind !== "FLASHCARD";
 
   return (
     <main className="container narrow">
       <div className="row between">
         <button className="btn btn-ghost btn-sm" onClick={onExit}>← К обучению</button>
-        <span className="badge">{kind === "TRUE_FALSE" ? `Очки: ${score}` : `Карточка ${Math.min(i + 1, items.length)} из ${items.length}`}</span>
+        <span className="badge">{scored ? `Очки: ${score}` : `Карточка ${Math.min(i + 1, items.length)} из ${items.length}`}</span>
       </div>
       <div className="progress mt">
         {items.map((_, k) => (
@@ -120,12 +131,46 @@ function Game({ kind, onExit }: { kind: "TRUE_FALSE" | "FLASHCARD"; onExit: () =
 
       {done ? (
         <div className="card center stack mt">
-          <div style={{ fontSize: 56 }}>{kind === "TRUE_FALSE" ? (score === items.length ? "🏆" : "🎉") : "🧠"}</div>
-          <h2>{kind === "TRUE_FALSE" ? `Правильно ${score} из ${items.length}` : "Раунд пройден!"}</h2>
+          <div style={{ fontSize: 56 }}>{scored ? (score === items.length ? "🏆" : "🎉") : "🧠"}</div>
+          <h2>{scored ? `Правильно ${score} из ${items.length}` : "Раунд пройден!"}</h2>
           <div className="row" style={{ justifyContent: "center" }}>
             <button className="btn btn-primary" onClick={() => setRound(round + 1)}>Ещё раунд</button>
             <button className="btn btn-ghost" onClick={onExit}>К обучению</button>
           </div>
+        </div>
+      ) : kind === "FIX_ERROR" ? (
+        // Свободный ответ сравнивает сам сотрудник: показываем образец и спрашиваем, совпало ли.
+        <div className="card stack mt">
+          <div className="muted small">Найдите ошибку и напишите, как правильно</div>
+          {item.image && <img src={item.image} alt="Скриншот чата" className="question-image" />}
+          {item.prompt && <div className="question-text">«{item.prompt}»</div>}
+          <textarea className="textarea" placeholder="Ваш исправленный вариант" value={draft} onChange={(e) => setDraft(e.target.value)} disabled={flipped} />
+          {!flipped ? (
+            <button className="btn btn-primary btn-block" onClick={() => setFlipped(true)} disabled={!draft.trim()}>
+              Проверить
+            </button>
+          ) : picked === null ? (
+            <>
+              <div className="answer-box ok">
+                <div className="muted small">Правильный вариант</div>
+                {item.answer}
+                {item.explanation && <div style={{ marginTop: 6 }}>💡 {item.explanation}</div>}
+              </div>
+              <div className="muted small center">Ваш вариант совпадает по смыслу?</div>
+              <div className="grid grid-2">
+                <button className="btn btn-primary" onClick={() => { setPicked(true); setScore(score + 1); }}>✅ Да, исправил</button>
+                <button className="btn btn-danger" onClick={() => setPicked(false)}>❌ Нет, ошибся</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={`answer-box ${picked ? "ok" : "bad"}`}>
+                {picked ? "✅ Отлично! " : "Запомните правильный вариант: "}
+                {!picked && item.answer}
+              </div>
+              <button className="btn btn-primary btn-block" onClick={next}>Дальше →</button>
+            </>
+          )}
         </div>
       ) : kind === "TRUE_FALSE" ? (
         <div className="card stack mt">

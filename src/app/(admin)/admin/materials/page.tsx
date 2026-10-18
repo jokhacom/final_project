@@ -288,7 +288,7 @@ export default function MaterialsAdminPage() {
 
   const createGames = (m: Material) => {
     if (gamesPerTopic === 0) return setNotice("В «Настройках создания» стоит 0 элементов игр на тему — укажите число больше 0.");
-    if (!confirm(`Создать игры («Можно или нельзя?» и «Карточки») по темам документа «${m.title}»? По ${gamesPerTopic} фразы и ${gamesPerTopic} карточки на тему.`)) return;
+    if (!confirm(`Создать игры («Можно или нельзя?», «Карточки» и «Найди и исправь ошибку») по темам документа «${m.title}»? По ${gamesPerTopic} элементов каждой игры на тему.`)) return;
     return run(`games:${m.id}`, async () => {
       const g = await generateGames(m.id);
       setExpanded(m.id);

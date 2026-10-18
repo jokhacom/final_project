@@ -1,20 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ImagePicker } from "@/components/admin/ImagePicker";
 
 type Presentation = { id: string; title: string; description: string | null; fileName: string; size: number; order: number; createdAt: string };
 type GameItem = {
   id: string;
-  kind: "TRUE_FALSE" | "FLASHCARD";
+  kind: "TRUE_FALSE" | "FLASHCARD" | "FIX_ERROR";
   prompt: string;
   answer: string | null;
   isCorrect: boolean | null;
   explanation: string | null;
+  image: string | null;
   topic: { name: string } | null;
 };
 
-const KIND_LABEL = { TRUE_FALSE: "«Можно или нельзя?»", FLASHCARD: "«Карточки»" };
-const emptyItem = (kind: GameItem["kind"]): Partial<GameItem> => ({ kind, prompt: "", answer: "", isCorrect: true, explanation: "" });
+const KIND_LABEL = { TRUE_FALSE: "«Можно или нельзя?»", FLASHCARD: "«Карточки»", FIX_ERROR: "«Найди и исправь ошибку»" };
+const emptyItem = (kind: GameItem["kind"]): Partial<GameItem> => ({ kind, prompt: "", answer: "", isCorrect: true, explanation: "", image: null });
 
 async function send(url: string, method: string, body?: object) {
   const res = await fetch(url, {
@@ -27,7 +29,7 @@ async function send(url: string, method: string, body?: object) {
   return data;
 }
 
-// Обучение: готовые презентации (PDF) и элементы обучающих игр.
+// Обучение: готовые презентации (PDF) и элементы трёх обучающих игр.
 // Игры ИИ создаёт по темам документа только по команде администратора
 // («Материалы» → «🎮 Создать игры»); здесь любой элемент можно добавить вручную, изменить или удалить.
 export default function AdminLearningPage() {
@@ -157,8 +159,8 @@ export default function AdminLearningPage() {
             + Добавить вручную
           </button>
         </div>
-        <div className="tabs" style={{ maxWidth: 520 }}>
-          {(["TRUE_FALSE", "FLASHCARD"] as const).map((k) => (
+        <div className="tabs" style={{ maxWidth: 760 }}>
+          {(["TRUE_FALSE", "FLASHCARD", "FIX_ERROR"] as const).map((k) => (
             <button key={k} className={kind === k ? "active" : ""} onClick={() => { setKind(k); setEditing(null); }}>
               {KIND_LABEL[k]} ({(items ?? []).filter((i) => i.kind === k).length})
             </button>
@@ -191,8 +193,9 @@ export default function AdminLearningPage() {
                 <div className="row between" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
                   <div>
                     {g.kind === "TRUE_FALSE" && <span className="badge" style={{ marginRight: 6 }}>{g.isCorrect ? "✅ Можно" : "❌ Нельзя"}</span>}
+                    {g.image && <img src={g.image} alt="" style={{ display: "block", maxHeight: 120, maxWidth: "100%", borderRadius: 8, marginBottom: 4 }} />}
                     <span style={{ fontWeight: 700 }}>{g.prompt}</span>
-                    {g.kind === "FLASHCARD" && <div className="small" style={{ marginTop: 4 }}>↪ {g.answer}</div>}
+                    {g.kind !== "TRUE_FALSE" && <div className="small" style={{ marginTop: 4 }}>↪ {g.answer}</div>}
                     {g.explanation && <div className="muted small" style={{ marginTop: 4 }}>💡 {g.explanation}</div>}
                     {g.topic && <div className="muted small">Тема: {g.topic.name}</div>}
                   </div>
@@ -226,12 +229,15 @@ function GameItemForm({ initial, onSave, onCancel }: { initial: Partial<GameItem
     answer: initial.answer ?? "",
     isCorrect: initial.isCorrect ?? true,
     explanation: initial.explanation ?? "",
+    image: initial.image ?? "",
   });
   const tf = v.kind === "TRUE_FALSE";
+  const fix = v.kind === "FIX_ERROR";
   return (
     <div className="card stack" style={{ background: "var(--surface-strong)" }}>
+      {fix && <ImagePicker label="Скриншот чата с ошибкой (необязательно)" value={v.image} onChange={(image) => setV({ ...v, image })} />}
       <label className="field">
-        {tf ? "Фраза сотрудника клиенту" : "Ситуация (лицевая сторона карточки)"}
+        {tf ? "Фраза сотрудника клиенту" : fix ? "Сообщение с ошибкой или задание (можно не заполнять, если есть скриншот)" : "Ситуация (лицевая сторона карточки)"}
         <textarea className="textarea" style={{ minHeight: 70 }} value={v.prompt} onChange={(e) => setV({ ...v, prompt: e.target.value })} />
       </label>
       {tf ? (
@@ -245,7 +251,7 @@ function GameItemForm({ initial, onSave, onCancel }: { initial: Partial<GameItem
         </div>
       ) : (
         <label className="field">
-          Как правильно (обратная сторона)
+          {fix ? "Правильный вариант" : "Как правильно (обратная сторона)"}
           <textarea className="textarea" style={{ minHeight: 70 }} value={v.answer} onChange={(e) => setV({ ...v, answer: e.target.value })} />
         </label>
       )}
@@ -254,7 +260,7 @@ function GameItemForm({ initial, onSave, onCancel }: { initial: Partial<GameItem
         <input className="input" value={v.explanation} onChange={(e) => setV({ ...v, explanation: e.target.value })} />
       </label>
       <div className="row">
-        <button className="btn btn-primary btn-sm" onClick={() => onSave(v)} disabled={!v.prompt.trim()}>
+        <button className="btn btn-primary btn-sm" onClick={() => onSave(v)} disabled={!v.prompt.trim() && !(fix && v.image)}>
           Сохранить
         </button>
         <button className="btn btn-ghost btn-sm" onClick={onCancel}>

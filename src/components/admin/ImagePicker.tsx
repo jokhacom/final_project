@@ -26,7 +26,7 @@ function compress(file: File): Promise<string> {
   });
 }
 
-export function ImagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function ImagePicker({ value, onChange, label = "Скриншот к вопросу (необязательно)" }: { value: string; onChange: (v: string) => void; label?: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function pick(file: File | undefined) {
@@ -42,7 +42,7 @@ export function ImagePicker({ value, onChange }: { value: string; onChange: (v: 
 
   return (
     <div className="field">
-      <span>Скриншот к вопросу (необязательно)</span>
+      <span>{label}</span>
       {value ? (
         <div className="stack" style={{ gap: 8 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
