@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdmin, requireAdmin, requireUser } from "@/lib/session";
-import { isGameKind, validateGameItem } from "@/lib/games";
+import { GAME_KINDS, LANGUAGE_ROUND, isGameKind, isGameLanguage, validateGameItem } from "@/lib/games";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -12,7 +12,8 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// ?kind=TRUE_FALSE|FLASHCARD|FIX_ERROR — раунд игры (до 12 случайных элементов).
+// ?kind=TRUE_FALSE|FIX_ERROR — раунд игры (до 12 случайных элементов);
+// ?kind=LANGUAGE&language=ru|uz — раунд «Грамотности» (10 вопросов одного языка).
 // ?all=1 — полный список для админ-панели.
 export async function GET(req: NextRequest) {
   const user = await requireUser();
@@ -20,18 +21,24 @@ export async function GET(req: NextRequest) {
 
   const kind = req.nextUrl.searchParams.get("kind");
   const all = req.nextUrl.searchParams.get("all") === "1" && isAdmin(user);
-  const where = isGameKind(kind) ? { kind } : {};
+  const language = req.nextUrl.searchParams.get("language");
+  const visible = { kind: { in: [...GAME_KINDS] } };
+  const where = isGameKind(kind) ? { kind, ...(kind === "LANGUAGE" && isGameLanguage(language) ? { language } : {}) } : visible;
 
   const items = await db.gameItem.findMany({
     where,
     orderBy: { createdAt: "desc" },
     include: { topic: { select: { name: true } } },
   });
-  const counts = await db.gameItem.groupBy({ by: ["kind"], _count: { _all: true } });
+  const [counts, langCounts] = await Promise.all([
+    db.gameItem.groupBy({ by: ["kind"], where: visible, _count: { _all: true } }),
+    db.gameItem.groupBy({ by: ["language"], where: { kind: "LANGUAGE" }, _count: { _all: true } }),
+  ]);
 
   return NextResponse.json({
-    items: all ? items : shuffle(items).slice(0, 12),
+    items: all ? items : shuffle(items).slice(0, kind === "LANGUAGE" ? LANGUAGE_ROUND : 12),
     counts: Object.fromEntries(counts.map((c) => [c.kind, c._count._all])),
+    languages: Object.fromEntries(langCounts.map((c) => [c.language, c._count._all])),
   });
 }
 
