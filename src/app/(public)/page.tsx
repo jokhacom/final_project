@@ -1,89 +1,83 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { signIn, useSession } from "next-auth/react";
+import Link from "next/link";
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { LEVELS } from "@/lib/levels";
 
-// Вход только по логину и паролю; регистрация сотрудника — на этой же странице.
-export default function AuthPage() {
+const STEPS = [
+  { title: "Войдите", text: "Зарегистрируйтесь или войдите по логину и паролю." },
+  { title: "Пройдите уровни", text: "Новичок → Middle → Professional: вопросы по Редполитике и Tone of Voice." },
+  { title: "Сдайте экзамен", text: "Итоговое задание (KPI) — отдельный тест для проверки знаний." },
+];
+
+const FEATURES = [
+  { icon: "🍬", title: "Конфеты", text: "За тест — до 100 🍬. Ошибки в ответах и орфографии отнимают конфеты." },
+  { icon: "🏆", title: "Рейтинг и достижения", text: "Сравните результат с коллегами и соберите награды." },
+  { icon: "🎮", title: "Игры", text: "Флеш-карточки и «Правда или ложь» для быстрого повторения." },
+  { icon: "📊", title: "Презентации", text: "Учебные материалы можно открыть прямо на сайте." },
+];
+
+// Главная страница: что это за тренажер и как он работает. Вход — на /login.
+export default function LandingPage() {
   const { status } = useSession();
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (status === "authenticated") router.replace("/levels");
   }, [status, router]);
 
-  async function login() {
-    const res = await signIn("credentials", { username: username.trim(), password, redirect: false });
-    if (res?.error) throw new Error("Неверный логин или пароль");
-    router.push("/levels");
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      if (mode === "register") {
-        const res = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, username, password }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? "Не удалось зарегистрироваться");
-      }
-      await login();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setLoading(false);
-    }
-  }
-
-  const canSubmit = username.trim() && password && (mode === "login" || name.trim());
-
   return (
-    <main className="container" style={{ maxWidth: 440, paddingTop: 48 }}>
-      <div className="center" style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 64 }}>🍭</div>
+    <main className="container">
+      <section className="hero">
+        <div style={{ fontSize: 72 }}>🍭</div>
         <h1>Тренажер знаний ГЦО</h1>
+        <p className="muted">Учитесь отвечать клиентам правильно — в формате коротких тестов и игр.</p>
+        <Link href="/login" className="btn btn-primary">
+          Войти →
+        </Link>
+      </section>
+
+      <h2 className="mt-lg center">Как это работает</h2>
+      <div className="grid grid-land mt">
+        {STEPS.map((s, i) => (
+          <div key={s.title} className="card stack" style={{ gap: 8 }}>
+            <div className="step-num">{i + 1}</div>
+            <strong>{s.title}</strong>
+            <div className="muted small">{s.text}</div>
+          </div>
+        ))}
       </div>
 
-      <form className="card stack" onSubmit={handleSubmit}>
-        <div className="tabs">
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-            Вход
-          </button>
-          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
-            Регистрация
-          </button>
-        </div>
+      <h2 className="mt-lg center">Уровни</h2>
+      <div className="grid grid-land mt">
+        {LEVELS.map((l) => (
+          <div key={l.id} className="card level-card static" style={{ ["--level" as string]: l.color }}>
+            <div className="level-title">
+              {l.icon} {l.label}
+            </div>
+            <div className="muted small">{l.description}</div>
+          </div>
+        ))}
+      </div>
 
-        {mode === "register" && (
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя и фамилия" autoComplete="name" />
-        )}
-        <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Логин" autoComplete="username" />
-        <input
-          className="input"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder={mode === "register" ? "Пароль (не короче 6 символов)" : "Пароль"}
-          autoComplete={mode === "register" ? "new-password" : "current-password"}
-        />
+      <h2 className="mt-lg center">Что внутри</h2>
+      <div className="grid grid-land mt">
+        {FEATURES.map((f) => (
+          <div key={f.title} className="card stack" style={{ gap: 8 }}>
+            <div className="feature-icon">{f.icon}</div>
+            <strong>{f.title}</strong>
+            <div className="muted small">{f.text}</div>
+          </div>
+        ))}
+      </div>
 
-        {error && <div className="alert alert-error">{error}</div>}
-
-        <button className="btn btn-primary btn-block" type="submit" disabled={loading || !canSubmit}>
-          {loading ? "Подождите..." : mode === "login" ? "Войти →" : "Зарегистрироваться →"}
-        </button>
-      </form>
+      <div className="center mt-lg">
+        <Link href="/login" className="btn btn-primary">
+          Начать →
+        </Link>
+      </div>
     </main>
   );
 }
