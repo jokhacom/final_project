@@ -1,7 +1,7 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
-// Все страницы, кроме входа, — только для вошедших (иначе редирект на "/").
+// Все страницы, кроме входа, — только для вошедших (иначе редирект на "/login").
 // /admin/* — дополнительно только для ADMIN и SUPERADMIN.
 export default withAuth(
   function middleware(req) {
@@ -17,7 +17,7 @@ export default withAuth(
     callbacks: {
       authorized: ({ token }) => !!token,
     },
-    pages: { signIn: "/" },
+    pages: { signIn: "/login" },
   }
 );
 
