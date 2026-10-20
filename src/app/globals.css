@@ -230,3 +230,16 @@ button.level-card { border: 1px solid var(--border); }
 .option.correct { border-color: var(--success); background: var(--success-bg); }
 .option.wrong { border-color: var(--danger); background: var(--danger-bg); }
 .option:disabled { cursor: default; }
+
+/* Просмотр PDF как слайдов */
+.pdf-slides { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.pdf-slide-area { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: #2b2b2e; border-radius: 12px; overflow: hidden; touch-action: pan-y; user-select: none; }
+.pdf-slide-area canvas { border-radius: 6px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); }
+.pdf-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 32px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding-bottom: 4px; }
+.pdf-arrow.left { left: 8px; }
+.pdf-arrow.right { right: 8px; }
+.pdf-arrow:disabled { opacity: 0.25; cursor: default; }
+.pdf-counter { text-align: center; font-weight: 800; font-size: 14px; }
+body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (презентация и т.п.) не перекрываем кнопкой */
+.presentation-card { width: min(1100px, 100%); height: 90vh; display: flex; flex-direction: column; padding: 12px; }
+.presentation-card.fullview { position: fixed; inset: 0; width: 100%; height: 100dvh; max-width: none; border-radius: 0; padding: 8px; z-index: 40; background: #1b1b1e; }
