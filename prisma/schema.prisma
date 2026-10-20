@@ -230,6 +230,18 @@ model Presentation {
   createdAt   DateTime @default(now())
 }
 
+// Части загружаемой презентации: браузер шлёт файл кусками по 3 МБ (лимит запроса Vercel ~4,5 МБ),
+// сервер собирает их и кладёт файл в Vercel Blob, после чего части удаляются.
+model UploadChunk {
+  id        String   @id @default(cuid())
+  uploadId  String
+  index     Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@unique([uploadId, index])
+}
+
 enum GameKind {
   TRUE_FALSE // «Можно или нельзя?»: фраза сотрудника клиенту — допустима или нет
   FLASHCARD  // «Карточки» — больше не показываются, заменены игрой «Грамотность»
