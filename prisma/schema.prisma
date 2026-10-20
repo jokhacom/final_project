@@ -222,7 +222,9 @@ model Presentation {
   title       String
   description String?
   fileName    String
-  data        Bytes    // сам PDF (до ~4 МБ — лимит запроса Vercel)
+  data        Bytes?   // старый способ: PDF прямо в базе (до ~4 МБ — лимит запроса Vercel)
+  url         String?  // файл в Vercel Blob (PDF или PowerPoint, любой размер до лимита)
+  contentType String?  // application/pdf, ...presentationml.presentation, application/vnd.ms-powerpoint
   size        Int
   order       Int      @default(0)
   createdAt   DateTime @default(now())
