@@ -5,7 +5,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 // Свой просмотрщик PDF (pdf.js): браузеры на Android не показывают PDF внутри страницы.
 // Как слайды: одна страница на экране, листать свайпом, стрелками ‹ › или клавишами ← →.
-// Страница вписывается в окно и рисуется с учётом плотности экрана, чтобы текст был чётким.
+// Страница вписывается в окно (и перерисовывается при смене его размера) с учётом плотности экрана, чтобы текст был чётким.
 export function PdfViewer({ src }: { src: string }) {
   const area = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -52,12 +52,18 @@ export function PdfViewer({ src }: { src: string }) {
       await task.promise.catch(() => {});
     };
     draw();
-    const onResize = () => draw();
-    window.addEventListener("resize", onResize);
+    // Перерисовываем при любом изменении размера: поворот телефона, «На весь экран».
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(draw, 150);
+    });
+    observer.observe(area.current);
     return () => {
       stopped = true;
       task?.cancel();
-      window.removeEventListener("resize", onResize);
+      clearTimeout(timer);
+      observer.disconnect();
     };
   }, [doc, page]);
 

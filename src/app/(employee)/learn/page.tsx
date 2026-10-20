@@ -73,29 +73,81 @@ export default function LearnPage() {
         </div>
       )}
 
-      {viewing && (
-        <div className="modal-backdrop" onClick={() => setViewing(null)}>
-          <div className="card" style={{ width: "min(1100px, 100%)", height: "90vh", display: "flex", flexDirection: "column", padding: 12 }} onClick={(e) => e.stopPropagation()}>
-            <div className="row between" style={{ marginBottom: 8 }}>
-              <strong>{viewing.title}</strong>
-              <div className="row">
-                <a className="btn btn-ghost btn-sm" href={viewerUrl(viewing)} target="_blank" rel="noreferrer">
-                  Открыть в новой вкладке
-                </a>
-                <button className="btn btn-primary btn-sm" onClick={() => setViewing(null)}>
+      {viewing && <PresentationModal p={viewing} onClose={() => setViewing(null)} />}
+    </main>
+  );
+}
+
+// Окно презентации. «На весь экран» раскрывает её на весь экран телефона (Fullscreen API,
+// а где его нет, например на iPhone, — окно просто растягивается). Выйти — той же кнопкой,
+// клавишей Esc или кнопкой «Назад» телефона: для этого раскрытие добавляет шаг в историю.
+function PresentationModal({ p, onClose }: { p: Presentation; onClose: () => void }) {
+  const card = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+
+  useEffect(() => {
+    const onPop = () => {
+      setFull(false);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
+    // Вышли из полноэкранного режима системно (Esc, жест) — убираем и наш шаг истории.
+    const onFsChange = () => {
+      if (!document.fullscreenElement && history.state?.presentationFull) history.back();
+    };
+    window.addEventListener("popstate", onPop);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      document.removeEventListener("fullscreenchange", onFsChange);
+    };
+  }, []);
+
+  function expand() {
+    history.pushState({ presentationFull: true }, "");
+    setFull(true);
+    card.current?.requestFullscreen?.().catch(() => {});
+  }
+
+  function collapse() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); // дальше — onFsChange → history.back
+    else if (history.state?.presentationFull) history.back();
+    else setFull(false);
+  }
+
+  function close() {
+    if (full) collapse();
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={close}>
+      <div ref={card} className={`card presentation-card ${full ? "fullview" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="row between" style={{ marginBottom: 8, flexWrap: "nowrap" }}>
+          <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</strong>
+          <div className="row" style={{ flexWrap: "nowrap" }}>
+            {full ? (
+              <button className="btn btn-ghost btn-sm" onClick={collapse}>
+                ✕ Свернуть
+              </button>
+            ) : (
+              <>
+                <button className="btn btn-ghost btn-sm" onClick={expand}>
+                  ⛶ На весь экран
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={close}>
                   Закрыть
                 </button>
-              </div>
-            </div>
-            {isPowerPoint(viewing.fileName) ? (
-              <iframe src={viewerUrl(viewing)} title={viewing.title} allowFullScreen style={{ flex: 1, border: 0, borderRadius: 12, background: "#fff" }} />
-            ) : (
-              <PdfViewer src={viewerUrl(viewing)} />
+              </>
             )}
           </div>
         </div>
-      )}
-    </main>
+        {isPowerPoint(p.fileName) ? (
+          <iframe src={viewerUrl(p)} title={p.title} allowFullScreen style={{ flex: 1, border: 0, borderRadius: 12, background: "#fff" }} />
+        ) : (
+          <PdfViewer src={viewerUrl(p)} />
+        )}
+      </div>
+    </div>
   );
 }
 
