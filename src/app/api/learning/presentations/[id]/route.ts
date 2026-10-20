@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { del } from "@vercel/blob";
 import { requireAdmin, requireUser } from "@/lib/session";
+import { viewerUrl } from "@/lib/presentations";
 
-// Сам PDF — открывается прямо в браузере.
+// Сам файл: из базы (старые PDF) или переход к файлу в хранилище / просмотрщику PowerPoint.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
@@ -10,6 +12,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const p = await db.presentation.findUnique({ where: { id } });
   if (!p) return NextResponse.json({ error: "Презентация не найдена" }, { status: 404 });
+  if (p.url) return NextResponse.redirect(viewerUrl(p));
+  if (!p.data) return NextResponse.json({ error: "Файл не найден" }, { status: 404 });
   return new NextResponse(Buffer.from(p.data), {
     headers: {
       "Content-Type": "application/pdf",
@@ -44,6 +48,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (admin instanceof NextResponse) return admin;
 
   const { id } = await params;
-  await db.presentation.delete({ where: { id } });
+  const p = await db.presentation.delete({ where: { id }, select: { url: true } });
+  // Файл в хранилище; если не удалился за 10 секунд — запись всё равно убрана.
+  if (p.url) await Promise.race([del(p.url), new Promise((r) => setTimeout(r, 10_000))]).catch(() => {});
   return NextResponse.json({ deleted: true });
 }

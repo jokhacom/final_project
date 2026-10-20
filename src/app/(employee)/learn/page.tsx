@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
+import { isPowerPoint, viewerUrl } from "@/lib/presentations";
 
-type Presentation = { id: string; title: string; description: string | null };
+type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null };
 type Kind = "TRUE_FALSE" | "FIX_ERROR" | "LANGUAGE";
 type Item = { id: string; kind: Kind; prompt: string; answer: string | null; isCorrect: boolean | null; explanation: string | null; image: string | null };
 type LangItem = { id: string; prompt: string; options: string[]; correctIndex: number; explanation: string | null; category: string | null };
@@ -63,7 +64,7 @@ export default function LearnPage() {
         <div className="grid grid-2">
           {presentations.map((p) => (
             <button key={p.id} className="card" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer" }} onClick={() => setViewing(p)}>
-              <div style={{ fontSize: 28 }}>📊</div>
+              <div style={{ fontSize: 28 }}>{isPowerPoint(p.fileName) ? "📽️" : "📊"}</div>
               <div style={{ fontWeight: 900, fontSize: 17 }}>{p.title}</div>
               {p.description && <div className="muted small">{p.description}</div>}
             </button>
@@ -77,7 +78,7 @@ export default function LearnPage() {
             <div className="row between" style={{ marginBottom: 8 }}>
               <strong>{viewing.title}</strong>
               <div className="row">
-                <a className="btn btn-ghost btn-sm" href={`/api/learning/presentations/${viewing.id}`} target="_blank" rel="noreferrer">
+                <a className="btn btn-ghost btn-sm" href={viewerUrl(viewing)} target="_blank" rel="noreferrer">
                   Открыть в новой вкладке
                 </a>
                 <button className="btn btn-primary btn-sm" onClick={() => setViewing(null)}>
@@ -85,7 +86,7 @@ export default function LearnPage() {
                 </button>
               </div>
             </div>
-            <iframe src={`/api/learning/presentations/${viewing.id}`} title={viewing.title} style={{ flex: 1, border: 0, borderRadius: 12, background: "#fff" }} />
+            <iframe src={viewerUrl(viewing)} title={viewing.title} allowFullScreen style={{ flex: 1, border: 0, borderRadius: 12, background: "#fff" }} />
           </div>
         </div>
       )}

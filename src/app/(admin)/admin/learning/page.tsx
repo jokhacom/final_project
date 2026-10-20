@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { upload as uploadToBlob } from "@vercel/blob/client";
 import { ImagePicker } from "@/components/admin/ImagePicker";
 import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
+import { MAX_PRESENTATION_MB, PRESENTATION_TYPES, extOf, viewerUrl } from "@/lib/presentations";
 
-type Presentation = { id: string; title: string; description: string | null; fileName: string; size: number; order: number; createdAt: string };
+type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null; size: number; order: number; createdAt: string };
 type GameItem = {
   id: string;
   kind: "TRUE_FALSE" | "FIX_ERROR" | "LANGUAGE";
@@ -62,10 +64,15 @@ export default function AdminLearningPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [blob, setBlob] = useState(false); // подключено хранилище файлов — можно PowerPoint и большие файлы
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const loadPresentations = () => fetch("/api/learning/presentations").then((r) => r.json()).then((d) => setPresentations(d.items ?? []));
+  const loadPresentations = () => fetch("/api/learning/presentations").then((r) => r.json()).then((d) => {
+      setPresentations(d.items ?? []);
+      setBlob(!!d.blob);
+    });
   const loadItems = () => fetch("/api/learning/games?all=1").then((r) => r.json()).then((d) => setItems(d.items ?? []));
 
   useEffect(() => {
@@ -99,12 +106,32 @@ export default function AdminLearningPage() {
     if (!file) return;
     setUploading(true);
     await act(async () => {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("title", title);
-      form.append("description", description);
-      const res = await fetch("/api/learning/presentations", { method: "POST", body: form });
-      if (res.status === 413) throw new Error("Файл слишком большой (лимит около 4 МБ) — сожмите PDF");
+      let res: Response;
+      if (blob) {
+        // Файл идёт из браузера прямо в хранилище — без лимита запроса Vercel в 4,5 МБ.
+        if (!PRESENTATION_TYPES[extOf(file.name)]) throw new Error("Нужен PDF или PowerPoint (.pptx, .ppt)");
+        if (file.size > MAX_PRESENTATION_MB * 1024 * 1024) throw new Error(`Файл больше ${MAX_PRESENTATION_MB} МБ`);
+        setProgress(0);
+        const stored = await uploadToBlob(`presentations/${file.name}`, file, {
+          access: "public",
+          handleUploadUrl: "/api/learning/presentations/upload",
+          contentType: PRESENTATION_TYPES[extOf(file.name)],
+          multipart: file.size > 10 * 1024 * 1024,
+          onUploadProgress: (p) => setProgress(Math.round(p.percentage)),
+        });
+        res = await fetch("/api/learning/presentations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: stored.url, fileName: file.name, size: file.size, title, description }),
+        });
+      } else {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("title", title);
+        form.append("description", description);
+        res = await fetch("/api/learning/presentations", { method: "POST", body: form });
+      }
+      if (res.status === 413) throw new Error("Файл слишком большой (лимит около 4 МБ) — подключите хранилище файлов или сожмите PDF");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Ошибка загрузки");
       setFile(null);
@@ -137,13 +164,15 @@ export default function AdminLearningPage() {
           <input className="input" placeholder="Описание (необязательно)" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="row">
-          <input key={fileKey} type="file" accept=".pdf,application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <input key={fileKey} type="file" accept={blob ? ".pdf,.pptx,.ppt" : ".pdf,application/pdf"} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           <button className="btn btn-primary btn-sm" onClick={upload} disabled={!file || uploading}>
-            {uploading ? "Загружаем..." : "Загрузить презентацию"}
+            {uploading ? (blob ? `Загружаем... ${progress}%` : "Загружаем...") : "Загрузить презентацию"}
           </button>
         </div>
         <div className="muted small">
-          Только PDF до ~4 МБ. Презентацию PowerPoint или Google Slides сохраните как PDF: «Файл → Сохранить как (Скачать) → PDF».
+          {blob
+            ? `PDF или PowerPoint (.pptx, .ppt) до ${MAX_PRESENTATION_MB} МБ. PowerPoint сотрудники смотрят прямо на сайте (через просмотрщик Microsoft).`
+            : "Сейчас — только PDF до ~4 МБ. Чтобы загружать PowerPoint и файлы больше, подключите хранилище файлов: Vercel → проект → Storage → Create → Blob → Connect (см. README)."}
         </div>
 
         {presentations.length === 0 ? (
@@ -152,7 +181,7 @@ export default function AdminLearningPage() {
           presentations.map((p) => (
             <div key={p.id} className="row between" style={{ padding: "10px 0", borderTop: "1px solid var(--border)" }}>
               <div>
-                <a href={`/api/learning/presentations/${p.id}`} target="_blank" rel="noreferrer" style={{ fontWeight: 800 }}>
+                <a href={viewerUrl(p)} target="_blank" rel="noreferrer" style={{ fontWeight: 800 }}>
                   {p.title}
                 </a>
                 <div className="muted small">
