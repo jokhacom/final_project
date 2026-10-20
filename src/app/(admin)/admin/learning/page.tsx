@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { upload as uploadToBlob, uploadPresigned } from "@vercel/blob/client";
 import { ImagePicker } from "@/components/admin/ImagePicker";
 import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
-import { MAX_PRESENTATION_MB, PRESENTATION_TYPES, extOf, viewerUrl } from "@/lib/presentations";
+import { CHUNK_BYTES, MAX_PRESENTATION_MB, PRESENTATION_TYPES, extOf, viewerUrl } from "@/lib/presentations";
 
 type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null; size: number; order: number; createdAt: string };
 type GameItem = {
@@ -65,14 +64,13 @@ export default function AdminLearningPage() {
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  // Как подключено хранилище файлов (тогда можно PowerPoint и большие файлы): см. GET /api/learning/presentations.
-  const [blob, setBlob] = useState<"token" | "presigned" | null>(null);
+  const [blob, setBlob] = useState(false); // подключено хранилище файлов — можно PowerPoint и большие файлы
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadPresentations = () => fetch("/api/learning/presentations").then((r) => r.json()).then((d) => {
       setPresentations(d.items ?? []);
-      setBlob(d.blob ?? null);
+      setBlob(!!d.blob);
     });
   const loadItems = () => fetch("/api/learning/games?all=1").then((r) => r.json()).then((d) => setItems(d.items ?? []));
 
@@ -109,27 +107,27 @@ export default function AdminLearningPage() {
     await act(async () => {
       let res: Response;
       if (blob) {
-        // Файл идёт из браузера прямо в хранилище — без лимита запроса Vercel в 4,5 МБ.
         if (!PRESENTATION_TYPES[extOf(file.name)]) throw new Error("Нужен PDF или PowerPoint (.pptx, .ppt)");
         if (file.size > MAX_PRESENTATION_MB * 1024 * 1024) throw new Error(`Файл больше ${MAX_PRESENTATION_MB} МБ`);
+        // Файл уходит частями по 3 МБ (лимит запроса Vercel ~4,5 МБ), сайт собирает их и кладёт в хранилище.
         setProgress(0);
-        const options = {
-          access: "public" as const,
-          handleUploadUrl: "/api/learning/presentations/upload",
-          contentType: PRESENTATION_TYPES[extOf(file.name)],
-          onUploadProgress: (p: { percentage: number }) => setProgress(Math.round(p.percentage)),
-        };
-        // Латиница в имени файла — на всякий случай для адреса в хранилище; название на сайте берётся из fileName.
-        const pathname = `presentations/${Date.now()}.${extOf(file.name)}`;
-        const stored =
-          blob === "presigned"
-            ? await uploadPresigned(pathname, file, options)
-            : await uploadToBlob(pathname, file, { ...options, multipart: file.size > 10 * 1024 * 1024 });
-        res = await fetch("/api/learning/presentations", {
+        const uploadId = crypto.randomUUID();
+        const parts = Math.ceil(file.size / CHUNK_BYTES);
+        for (let i = 0; i < parts; i++) {
+          const part = file.slice(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES);
+          let r: Response | null = null;
+          for (let attempt = 0; attempt < 3 && !r?.ok; attempt++) {
+            r = await fetch(`/api/learning/presentations/chunk?uploadId=${uploadId}&index=${i}`, { method: "POST", body: part }).catch(() => null);
+          }
+          if (!r?.ok) throw new Error((await r?.json().catch(() => null))?.error ?? "Связь прервалась — попробуйте ещё раз");
+          setProgress(Math.round(((i + 1) / parts) * 95));
+        }
+        res = await fetch("/api/learning/presentations/finish", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: stored.url, fileName: file.name, size: file.size, title, description }),
+          body: JSON.stringify({ uploadId, fileName: file.name, size: file.size, title, description }),
         });
+        setProgress(100);
       } else {
         const form = new FormData();
         form.append("file", file);
