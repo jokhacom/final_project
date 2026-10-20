@@ -5,7 +5,20 @@ import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
 import { isPowerPoint, viewerUrl } from "@/lib/presentations";
 import { PdfViewer } from "@/components/PdfViewer";
 
-type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null };
+type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null; createdAt: string };
+
+// Яркие обложки карточек презентаций — по очереди.
+const COVERS = [
+  { bg: "#E3E600", fg: "#2b2b2b" },
+  { bg: "#FF9EC4", fg: "#2b2b2b" },
+  { bg: "#7CF0C5", fg: "#2b2b2b" },
+  { bg: "#B9A3FF", fg: "#2b2b2b" },
+  { bg: "#FFC93C", fg: "#2b2b2b" },
+];
+const formatDate = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} в ${d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;
+};
 type Kind = "TRUE_FALSE" | "FIX_ERROR" | "LANGUAGE";
 type Item = { id: string; kind: Kind; prompt: string; answer: string | null; isCorrect: boolean | null; explanation: string | null; image: string | null };
 type LangItem = { id: string; prompt: string; options: string[]; correctIndex: number; explanation: string | null; category: string | null };
@@ -62,14 +75,26 @@ export default function LearnPage() {
       ) : presentations.length === 0 ? (
         <div className="card muted center">Презентаций пока нет</div>
       ) : (
-        <div className="grid grid-2">
-          {presentations.map((p) => (
-            <button key={p.id} className="card" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer" }} onClick={() => setViewing(p)}>
-              <div style={{ fontSize: 28 }}>{isPowerPoint(p.fileName) ? "📽️" : "📊"}</div>
-              <div style={{ fontWeight: 900, fontSize: 17 }}>{p.title}</div>
-              {p.description && <div className="muted small">{p.description}</div>}
-            </button>
-          ))}
+        <div className="pres-grid">
+          {presentations.map((p, i) => {
+            const cover = COVERS[i % COVERS.length];
+            return (
+              <button key={p.id} className="pres-card" onClick={() => setViewing(p)}>
+                <div className="pres-cover" style={{ background: cover.bg, color: cover.fg }}>
+                  <div className="pres-cover-title">{p.title}</div>
+                  <div className="pres-cover-bottom">
+                    {/* Номер по порядку загрузки: у новой презентации — самый большой. */}
+                    <span className="pres-cover-num">{presentations.length - i}</span>
+                    {p.description && <span className="pres-cover-tag">{p.description}</span>}
+                  </div>
+                </div>
+                <div className="pres-body">
+                  <div className="pres-meta">{formatDate(p.createdAt)}</div>
+                  <div className="pres-title">{p.title}</div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
