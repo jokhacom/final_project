@@ -13,8 +13,18 @@ export const CHUNK_BYTES = 3 * 1024 * 1024;
 export const extOf = (name: string) => name.split(".").pop()?.toLowerCase() ?? "";
 export const isPowerPoint = (name: string) => ["ppt", "pptx"].includes(extOf(name));
 
-// Адрес для просмотра на сайте (iframe) и для «Открыть в новой вкладке».
+// Файл из хранилища — через адрес нашего сайта (/files/…, см. middleware): у части провайдеров
+// домен *.blob.vercel-storage.com недоступен («подключение сброшено»), а сайт открывается.
+const BLOB_HOST = /^([a-z0-9]+)\.public\.blob\.vercel-storage\.com$/i;
+export function sameSiteUrl(url: string) {
+  const u = new URL(url);
+  const m = u.hostname.match(BLOB_HOST);
+  return m ? `/files/${m[1]}${u.pathname}` : url;
+}
+
+// Адрес для просмотра на сайте и для «Открыть в новой вкладке».
+// PowerPoint открывает просмотрщик Microsoft — он сам скачивает файл из хранилища по прямой ссылке.
 export function viewerUrl(p: { id: string; url: string | null; fileName: string }) {
   if (!p.url) return `/api/learning/presentations/${p.id}`;
-  return isPowerPoint(p.fileName) ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(p.url)}` : p.url;
+  return isPowerPoint(p.fileName) ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(p.url)}` : sameSiteUrl(p.url);
 }

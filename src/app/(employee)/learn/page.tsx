@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
 import { isPowerPoint, viewerUrl } from "@/lib/presentations";
+import { PdfViewer } from "@/components/PdfViewer";
 
 type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null };
 type Kind = "TRUE_FALSE" | "FIX_ERROR" | "LANGUAGE";
@@ -86,7 +87,11 @@ export default function LearnPage() {
                 </button>
               </div>
             </div>
-            <iframe src={viewerUrl(viewing)} title={viewing.title} allowFullScreen style={{ flex: 1, border: 0, borderRadius: 12, background: "#fff" }} />
+            {isPowerPoint(viewing.fileName) ? (
+              <iframe src={viewerUrl(viewing)} title={viewing.title} allowFullScreen style={{ flex: 1, border: 0, borderRadius: 12, background: "#fff" }} />
+            ) : (
+              <PdfViewer src={viewerUrl(viewing)} />
+            )}
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const p = await db.presentation.findUnique({ where: { id } });
   if (!p) return NextResponse.json({ error: "Презентация не найдена" }, { status: 404 });
-  if (p.url) return NextResponse.redirect(viewerUrl(p));
+  if (p.url) return NextResponse.redirect(new URL(viewerUrl(p), _req.url));
   if (!p.data) return NextResponse.json({ error: "Файл не найден" }, { status: 404 });
   return new NextResponse(Buffer.from(p.data), {
     headers: {
