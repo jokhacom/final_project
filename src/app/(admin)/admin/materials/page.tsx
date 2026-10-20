@@ -248,6 +248,20 @@ export default function MaterialsAdminPage() {
       );
     });
 
+  // Документ удаляется вместе с темами, вопросами и играми по нему.
+  const removeMaterial = (m: Material) => {
+    const q = m._count.questions;
+    if (!confirm(`Удалить документ «${m.title}»${q ? ` и все вопросы по нему (${q})` : ""}? Игры по его темам тоже удалятся. Это нельзя отменить.`)) return;
+    return run(`delete:${m.id}`, async () => {
+      const res = await fetch(`/api/materials/${m.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Не удалось удалить");
+      if (expanded === m.id) setExpanded(null);
+      await loadMaterials();
+      setNotice(`Документ «${m.title}» удалён. Вопросов удалено: ${data.questions}${data.games ? `, элементов игр: ${data.games}` : ""}.`);
+    });
+  };
+
   const handleUpload = () =>
     run("upload", async () => {
       if (!file) return;
@@ -492,6 +506,11 @@ export default function MaterialsAdminPage() {
               {m._count.topics > 0 && (
                 <button className="btn btn-ghost btn-sm" onClick={() => toggleExpand(m.id)}>
                   {expanded === m.id ? "📚 Скрыть темы" : "📚 Показать темы"}
+                </button>
+              )}
+              {isSuper && (
+                <button className="btn btn-danger btn-sm" disabled={!!busy} onClick={() => removeMaterial(m)}>
+                  {busy === `delete:${m.id}` ? "Удаляем..." : "🗑 Удалить"}
                 </button>
               )}
             </div>
