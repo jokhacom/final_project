@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { upload as uploadToBlob } from "@vercel/blob/client";
+import { upload as uploadToBlob, uploadPresigned } from "@vercel/blob/client";
 import { ImagePicker } from "@/components/admin/ImagePicker";
 import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
 import { MAX_PRESENTATION_MB, PRESENTATION_TYPES, extOf, viewerUrl } from "@/lib/presentations";
@@ -65,13 +65,14 @@ export default function AdminLearningPage() {
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [blob, setBlob] = useState(false); // подключено хранилище файлов — можно PowerPoint и большие файлы
+  // Как подключено хранилище файлов (тогда можно PowerPoint и большие файлы): см. GET /api/learning/presentations.
+  const [blob, setBlob] = useState<"token" | "presigned" | null>(null);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadPresentations = () => fetch("/api/learning/presentations").then((r) => r.json()).then((d) => {
       setPresentations(d.items ?? []);
-      setBlob(!!d.blob);
+      setBlob(d.blob ?? null);
     });
   const loadItems = () => fetch("/api/learning/games?all=1").then((r) => r.json()).then((d) => setItems(d.items ?? []));
 
@@ -112,13 +113,18 @@ export default function AdminLearningPage() {
         if (!PRESENTATION_TYPES[extOf(file.name)]) throw new Error("Нужен PDF или PowerPoint (.pptx, .ppt)");
         if (file.size > MAX_PRESENTATION_MB * 1024 * 1024) throw new Error(`Файл больше ${MAX_PRESENTATION_MB} МБ`);
         setProgress(0);
-        const stored = await uploadToBlob(`presentations/${file.name}`, file, {
-          access: "public",
+        const options = {
+          access: "public" as const,
           handleUploadUrl: "/api/learning/presentations/upload",
           contentType: PRESENTATION_TYPES[extOf(file.name)],
-          multipart: file.size > 10 * 1024 * 1024,
-          onUploadProgress: (p) => setProgress(Math.round(p.percentage)),
-        });
+          onUploadProgress: (p: { percentage: number }) => setProgress(Math.round(p.percentage)),
+        };
+        // Латиница в имени файла — на всякий случай для адреса в хранилище; название на сайте берётся из fileName.
+        const pathname = `presentations/${Date.now()}.${extOf(file.name)}`;
+        const stored =
+          blob === "presigned"
+            ? await uploadPresigned(pathname, file, options)
+            : await uploadToBlob(pathname, file, { ...options, multipart: file.size > 10 * 1024 * 1024 });
         res = await fetch("/api/learning/presentations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
