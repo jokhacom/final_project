@@ -6,7 +6,8 @@ import { PRESENTATION_TYPES, extOf } from "@/lib/presentations";
 const MAX_SIZE = 4 * 1024 * 1024; // без Blob файл идёт через функцию — лимит тела запроса Vercel около 4,5 МБ
 
 // Список презентаций для раздела «Обучение» (без самих файлов).
-// blob — подключено ли хранилище Vercel Blob (тогда можно PowerPoint и большие файлы).
+// blob — как подключено хранилище Vercel Blob (тогда можно PowerPoint и большие файлы):
+// "presigned" — новое подключение без ключа (BLOB_STORE_ID), "token" — старое (BLOB_READ_WRITE_TOKEN), null — нет.
 export async function GET() {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
@@ -15,7 +16,8 @@ export async function GET() {
     orderBy: [{ order: "asc" }, { createdAt: "desc" }],
     select: { id: true, title: true, description: true, fileName: true, url: true, size: true, order: true, createdAt: true },
   });
-  return NextResponse.json({ items, blob: !!process.env.BLOB_READ_WRITE_TOKEN });
+  const blob = process.env.BLOB_READ_WRITE_TOKEN ? "token" : process.env.BLOB_STORE_ID ? "presigned" : null;
+  return NextResponse.json({ items, blob });
 }
 
 // Добавить презентацию:
