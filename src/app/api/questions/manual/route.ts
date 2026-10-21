@@ -33,3 +33,19 @@ export async function GET(req: NextRequest) {
   ]);
   return NextResponse.json({ questions, archivedCount });
 }
+
+// Убрать в архив или вернуть сразу несколько вопросов: { ids: [...], archived: true | false }.
+export async function PATCH(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
+
+  const { ids, archived } = await req.json();
+  if (!Array.isArray(ids) || !ids.length || typeof archived !== "boolean") {
+    return NextResponse.json({ error: "Нужны ids и archived" }, { status: 400 });
+  }
+  const r = await db.question.updateMany({
+    where: { id: { in: ids.map(String) } },
+    data: { archivedAt: archived ? new Date() : null },
+  });
+  return NextResponse.json({ updated: r.count });
+}
