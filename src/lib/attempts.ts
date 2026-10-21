@@ -11,16 +11,31 @@ export function isExpired(a: { startedAt: Date; durationSec: number }) {
   return Date.now() > a.startedAt.getTime() + (a.durationSec + TEST_GRACE_SEC) * 1000;
 }
 
-// Можно ли сейчас принять ответ на вопрос в этой попытке. Возвращает текст ошибки или null.
+// Можно ли сейчас принять (или изменить) ответ на вопрос в этой попытке. Возвращает текст ошибки или null.
+// До завершения теста ответ можно менять: сотрудник ходит по вопросам стрелками «назад/вперёд».
 export async function answerBlocker(attemptId: string, userId: string, questionId: string): Promise<string | null> {
   const attempt = await db.testAttempt.findUnique({ where: { id: attemptId } });
   if (!attempt || attempt.userId !== userId) return "Попытка не найдена";
   if (attempt.finishedAt) return "Тест уже завершён";
   if (isExpired(attempt)) return "Время теста истекло";
   if (!attemptQuestionIds(attempt).includes(questionId)) return "Этого вопроса нет в вашем тесте";
-  const existing = await db.answer.findFirst({ where: { attemptId, questionId } });
-  if (existing) return "На этот вопрос уже дан ответ";
   return null;
+}
+
+// Сохранить ответ: первый раз — создать, повторно — заменить прежний.
+export async function saveAnswer(
+  attemptId: string,
+  questionId: string,
+  data: { rawAnswer: string; isCorrect: boolean; needsGrading?: boolean }
+) {
+  const existing = await db.answer.findFirst({ where: { attemptId, questionId }, select: { id: true } });
+  if (existing) await db.answer.update({ where: { id: existing.id }, data: { ...data, aiComment: null } });
+  else await db.answer.create({ data: { attemptId, questionId, ...data } });
+}
+
+// Тест ещё идёт: не завершён и время не вышло (без запаса на сеть — он только для приёма ответов).
+export function isRunning(a: { startedAt: Date; durationSec: number; finishedAt: Date | null }) {
+  return !a.finishedAt && Date.now() < a.startedAt.getTime() + a.durationSec * 1000;
 }
 
 // Полный разбор попытки: по каждому вопросу — ответ сотрудника, верный ответ и пояснение.

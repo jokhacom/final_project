@@ -5,6 +5,7 @@ import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel } from "@/lib/levels";
 import { attemptsLeft, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
+import { attemptQuestionIds, finishAttempt, isRunning } from "@/lib/attempts";
 
 function sample<T>(arr: T[], n: number): T[] {
   const copy = [...arr];
@@ -38,6 +39,14 @@ export async function POST(req: NextRequest) {
   const { level } = await req.json();
   if (!isLevel(level)) return NextResponse.json({ error: "Неизвестный уровень" }, { status: 400 });
 
+  // Незавершённый тест этого уровня: если время ещё идёт — продолжаем с того же места
+  // (время не останавливалось, ответы сохранены); если вышло — завершаем его, как при таймере.
+  const unfinished = await db.testAttempt.findMany({ where: { userId: user.id, level, finishedAt: null }, orderBy: { startedAt: "desc" } });
+  for (const a of unfinished) {
+    if (isRunning(a)) return NextResponse.json(await attemptPayload(a));
+    await finishAttempt(a.id);
+  }
+
   // Лимит попыток: считаются все начатые попытки (и брошенные), чтобы нельзя было
   // бесконечно начинать тест заново и подсматривать вопросы.
   const left = await attemptsLeft(user);
@@ -69,17 +78,24 @@ export async function POST(req: NextRequest) {
   const durationSec = (await getTestMinutes()) * 60;
   const attempt = await db.testAttempt.create({ data: { userId: user.id, level, candies: 0, questionIds, durationSec } });
 
-  const full = await db.question.findMany({
-    where: { id: { in: questionIds } },
-    select: { id: true, type: true, text: true, options: true, image: true },
-  });
-  // Правильный ответ, ключевые слова и пояснение в браузер не отдаём — только после завершения.
-  const questions = questionIds.map((id) => full.find((q) => q.id === id)!);
+  return NextResponse.json(await attemptPayload(attempt));
+}
 
-  return NextResponse.json({
+// Вопросы попытки (без правильных ответов), сохранённые ответы и сколько секунд осталось.
+async function attemptPayload(attempt: { id: string; startedAt: Date; durationSec: number; questionIds: unknown }) {
+  const questionIds = attemptQuestionIds(attempt);
+  const [full, answers] = await Promise.all([
+    db.question.findMany({ where: { id: { in: questionIds } }, select: { id: true, type: true, text: true, options: true, image: true } }),
+    db.answer.findMany({ where: { attemptId: attempt.id }, select: { questionId: true, rawAnswer: true } }),
+  ]);
+  // Правильный ответ, ключевые слова и пояснение в браузер не отдаём — только после завершения.
+  const questions = questionIds.map((id) => full.find((q) => q.id === id)).filter((q) => !!q);
+  const secondsLeft = Math.max(0, Math.round((attempt.startedAt.getTime() + attempt.durationSec * 1000 - Date.now()) / 1000));
+  return {
     attemptId: attempt.id,
-    startedAt: attempt.startedAt,
-    durationSec,
+    durationSec: attempt.durationSec,
+    secondsLeft,
     questions,
-  });
+    answers: Object.fromEntries(answers.map((a) => [a.questionId, a.rawAnswer ?? ""])),
+  };
 }
