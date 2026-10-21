@@ -6,6 +6,8 @@ import type { PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 // Свой просмотрщик PDF (pdf.js): браузеры на Android не показывают PDF внутри страницы.
 // Как слайды: одна страница на экране, листать свайпом, стрелками ‹ › или клавишами ← →.
 // Страница вписывается в окно (и перерисовывается при смене его размера) с учётом плотности экрана, чтобы текст был чётким.
+const MAX_CANVAS_PIXELS = 16_000_000;
+
 export function PdfViewer({ src }: { src: string }) {
   const area = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -41,13 +43,20 @@ export function PdfViewer({ src }: { src: string }) {
       if (stopped || !area.current || !canvas.current) return;
       const base = p.getViewport({ scale: 1 });
       const fit = Math.min(area.current.clientWidth / base.width, area.current.clientHeight / base.height);
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      // Рисуем минимум в 2 раза плотнее экрана (до 3×): на обычных мониторах текст иначе выходит мыльным.
+      // Но не больше MAX_CANVAS_PIXELS — на iPhone слишком большой canvas остаётся пустым.
+      let ratio = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
+      const area0 = base.width * fit * base.height * fit;
+      if (area0 * ratio * ratio > MAX_CANVAS_PIXELS) ratio = Math.sqrt(MAX_CANVAS_PIXELS / area0);
       const viewport = p.getViewport({ scale: fit * ratio });
+      // Целые размеры: дробная ширина canvas растягивает картинку на долю пикселя и размывает её.
+      const w = Math.floor(viewport.width);
+      const h = Math.floor(viewport.height);
       const c = canvas.current;
-      c.width = viewport.width;
-      c.height = viewport.height;
-      c.style.width = `${viewport.width / ratio}px`;
-      c.style.height = `${viewport.height / ratio}px`;
+      c.width = w;
+      c.height = h;
+      c.style.width = `${w / ratio}px`;
+      c.style.height = `${h / ratio}px`;
       task = p.render({ canvasContext: c.getContext("2d")!, viewport });
       await task.promise.catch(() => {});
     };
