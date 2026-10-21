@@ -89,7 +89,8 @@ export default function MaterialsAdminPage() {
   const [fileKey, setFileKey] = useState(0); // смена key сбрасывает выбранный файл в поле
   const [title, setTitle] = useState("");
   const [replaceId, setReplaceId] = useState("");
-  const [autoCreate, setAutoCreate] = useState(true);
+  // По умолчанию выключено: тесты создаются только по команде («🤖 Создать тесты» или «+» у темы).
+  const [autoCreate, setAutoCreate] = useState(false);
   // Поля храним строкой, чтобы цифру можно было стереть и набрать заново (иначе
   // пустое поле сразу превращалось в «1», и «2» набиралось как «12»).
   const [perTopicText, setPerTopicText] = useState("3");
@@ -383,7 +384,7 @@ export default function MaterialsAdminPage() {
             <>
               <label className="row small" style={{ cursor: "pointer" }}>
                 <input type="checkbox" checked={autoCreate} onChange={(e) => setAutoCreate(e.target.checked)} />
-                Сразу создать тесты после загрузки
+                Сразу создать тесты после загрузки (по «Вопросов на тему» для Новичка, Middle и Professional)
               </label>
 
             </>

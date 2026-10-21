@@ -18,7 +18,11 @@ type Q = {
   image: string | null;
   sourceMaterial: { title: string; version: number } | null;
   topic: { name: string } | null;
+  createdAt: string;
 };
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 // Банк вопросов: просмотр, правка, удаление и перегенерация ИИ.
 export default function QuestionsPage() {
@@ -80,6 +84,24 @@ export default function QuestionsPage() {
             body: JSON.stringify({ archived: method === "ARCHIVE" }),
           })
         : await fetch(`/api/questions/${id}`, { method });
+    const data = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) setError(data.error ?? "Ошибка");
+    load();
+  }
+
+  // Все показанные сейчас вопросы (с учётом фильтра уровня) — в архив или обратно.
+  async function bulk(archived: boolean) {
+    const ids = (questions ?? []).map((q) => q.id);
+    const what = level ? `«${LEVEL_LABEL[level]}»` : "всех уровней";
+    if (!ids.length || !confirm(archived ? `Убрать в архив все показанные вопросы ${what} (${ids.length})? Их можно будет вернуть.` : `Вернуть в тесты все вопросы из архива (${ids.length})?`)) return;
+    setBusy("bulk");
+    setError(null);
+    const res = await fetch("/api/questions/manual", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, archived }),
+    });
     const data = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) setError(data.error ?? "Ошибка");
@@ -168,6 +190,17 @@ export default function QuestionsPage() {
           })}
       </div>
 
+      {!!questions?.length && (
+        <div className="row mt">
+          <button className="btn btn-ghost btn-sm" disabled={busy === "bulk"} onClick={() => bulk(!showArchive)}>
+            {showArchive
+              ? `↩ Вернуть все в тесты (${questions.length})`
+              : `🗄 Убрать в архив все показанные (${questions.length})`}
+          </button>
+          {!showArchive && !level && <span className="muted small">Чтобы убрать только один уровень, сначала выберите его в списке.</span>}
+        </div>
+      )}
+
       {error && <div className="alert alert-error mt">{error}</div>}
 
       <div className="stack mt">
@@ -184,6 +217,7 @@ export default function QuestionsPage() {
             ) : (
               <div key={q.id} className="card">
                 <div className="row" style={{ gap: 6 }}>
+                  <span className="muted small">{formatDate(q.createdAt)}</span>
                   <span className="badge">{LEVEL_LABEL[q.level] ?? q.level}</span>
                   <span className="badge">{TYPE_LABEL[q.type] ?? q.type}</span>
                   {q.sourceMaterial && (
