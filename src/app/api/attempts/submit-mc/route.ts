@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { answerBlocker } from "@/lib/attempts";
+import { answerBlocker, saveAnswer } from "@/lib/attempts";
 import { isChoiceType } from "@/lib/ai/provider";
 
 // Вопрос с вариантами ответа проверяется напрямую (без ИИ) — сравнение с correctIndex.
@@ -20,13 +20,9 @@ export async function POST(req: NextRequest) {
   }
 
   const index = Number.isInteger(selectedIndex) ? selectedIndex : null;
-  await db.answer.create({
-    data: {
-      attemptId,
-      questionId,
-      rawAnswer: index == null ? "" : String(index),
-      isCorrect: index != null && index === question.correctIndex,
-    },
+  await saveAnswer(attemptId, questionId, {
+    rawAnswer: index == null ? "" : String(index),
+    isCorrect: index != null && index === question.correctIndex,
   });
 
   return NextResponse.json({ ok: true });

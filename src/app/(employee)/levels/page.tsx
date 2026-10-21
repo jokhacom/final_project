@@ -20,6 +20,7 @@ export default function LevelsPage() {
   const [ready, setReady] = useState<Record<string, boolean> | null>(null);
   const [inTest, setInTest] = useState<Record<string, number>>({});
   const [left, setLeft] = useState<Record<string, number | null>>({});
+  const [inProgress, setInProgress] = useState<Record<string, boolean>>({});
   const [minutes, setMinutes] = useState(15);
   const [count, setCount] = useState(10);
 
@@ -30,6 +31,7 @@ export default function LevelsPage() {
         setReady(Object.fromEntries((d.levels ?? []).map((l: { id: string; ready: boolean }) => [l.id, l.ready])));
         setInTest(Object.fromEntries((d.levels ?? []).map((l: { id: string; inTest: number }) => [l.id, l.inTest])));
         setLeft(Object.fromEntries((d.levels ?? []).map((l: { id: string; attemptsLeft: number | null }) => [l.id, l.attemptsLeft])));
+        setInProgress(Object.fromEntries((d.levels ?? []).map((l: { id: string; inProgress: boolean }) => [l.id, l.inProgress])));
         if (d.minutes) setMinutes(d.minutes);
         if (d.count) setCount(d.count);
       })
@@ -57,6 +59,17 @@ export default function LevelsPage() {
             </>
           );
           // Попытки по уровню закончились (лимит задаёт администратор).
+          // Начатый тест можно продолжить, даже если новых попыток не осталось.
+          if (inProgress[l.id]) {
+            return (
+              <Link key={l.id} href={`/test/${l.id}`} className="card level-card" style={{ ["--level" as any]: l.color }}>
+                {content}
+                <span className="badge" style={{ alignSelf: "flex-start" }}>
+                  ▶ Продолжить тест — время идёт
+                </span>
+              </Link>
+            );
+          }
           if (left[l.id] === 0) {
             return (
               <div key={l.id} className="card level-card disabled" style={{ ["--level" as any]: l.color }}>

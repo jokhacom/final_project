@@ -256,3 +256,7 @@ body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (
 .pres-title { font-size: 18px; font-weight: 700; line-height: 1.25; }
 .pres-cover-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
 .pres-cover-tag { background: rgba(0, 0, 0, 0.7); color: #fff; font-weight: 800; font-size: 13px; padding: 4px 10px; border-radius: 999px; max-width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Тест: навигация по вопросам */
+.seg-btn { border: 0; padding: 0; cursor: pointer; height: 10px; }
+.test-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
