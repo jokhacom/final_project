@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel } from "@/lib/levels";
-import { attemptsLeft, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
+import { attemptsLeft, getOpenSeconds, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
 import { attemptQuestionIds, finishAttempt, isRunning, openSecondsLeft, openStartsOf } from "@/lib/attempts";
 
@@ -84,10 +84,12 @@ export async function POST(req: NextRequest) {
 // Вопросы попытки (без правильных ответов), сохранённые ответы и сколько секунд осталось.
 async function attemptPayload(attempt: { id: string; level: string; startedAt: Date; durationSec: number; questionIds: unknown; openStarts: unknown }) {
   const questionIds = attemptQuestionIds(attempt);
-  const [full, answers] = await Promise.all([
+  const [full, answers, limits] = await Promise.all([
     db.question.findMany({ where: { id: { in: questionIds } }, select: { id: true, type: true, text: true, options: true, image: true } }),
     db.answer.findMany({ where: { attemptId: attempt.id }, select: { questionId: true, rawAnswer: true } }),
+    getOpenSeconds(),
   ]);
+  const limit = isLevel(attempt.level) ? limits[attempt.level] : 120;
   // Правильный ответ, ключевые слова и пояснение в браузер не отдаём — только после завершения.
   const questions = questionIds.map((id) => full.find((q) => q.id === id)).filter((q) => !!q);
   const secondsLeft = Math.max(0, Math.round((attempt.startedAt.getTime() + attempt.durationSec * 1000 - Date.now()) / 1000));
@@ -98,6 +100,6 @@ async function attemptPayload(attempt: { id: string; level: string; startedAt: D
     questions,
     answers: Object.fromEntries(answers.map((a) => [a.questionId, a.rawAnswer ?? ""])),
     // Открытые вопросы, которые уже открывали: сколько секунд на них осталось (может быть ≤ 0).
-    openLeft: Object.fromEntries(Object.keys(openStartsOf(attempt)).map((id) => [id, openSecondsLeft(attempt, id)])),
+    openLeft: Object.fromEntries(Object.keys(openStartsOf(attempt)).map((id) => [id, openSecondsLeft(attempt, id, limit)])),
   };
 }

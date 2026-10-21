@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { contentDisposition } from "@/lib/download";
 import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+      "Content-Disposition": contentDisposition(filename, userId ? "results-employee.xlsx" : "results-all.xlsx"),
     },
   });
 }

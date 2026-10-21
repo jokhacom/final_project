@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { LEVELS, OPEN_QUESTION_SECONDS, type LevelId } from "./levels";
 
 // Время на тест настраивается в админ-панели (Setting "test_duration_min").
 export const DEFAULT_TEST_MINUTES = 15;
@@ -50,4 +51,17 @@ export async function getTestMinutes(): Promise<number> {
   const s = await db.setting.findUnique({ where: { key: "test_duration_min" } });
   const n = Number(s?.value);
   return Number.isInteger(n) && n >= MIN_TEST_MINUTES && n <= MAX_TEST_MINUTES ? n : DEFAULT_TEST_MINUTES;
+}
+
+// Время на один открытый вопрос по уровням, в секундах. В настройке хранится в минутах (можно дробно: 1.5).
+export const openQuestionKey = (level: LevelId) => `open_question_min_${level}`;
+export const isValidOpenMinutes = (n: number) => Number.isFinite(n) && n >= 0.25 && n <= 60;
+export async function getOpenSeconds(): Promise<Record<LevelId, number>> {
+  const rows = await db.setting.findMany({ where: { key: { in: LEVELS.map((l) => openQuestionKey(l.id)) } } });
+  const result = { ...OPEN_QUESTION_SECONDS };
+  for (const l of LEVELS) {
+    const n = Number(rows.find((r) => r.key === openQuestionKey(l.id))?.value);
+    if (isValidOpenMinutes(n)) result[l.id] = Math.round(n * 60);
+  }
+  return result;
 }

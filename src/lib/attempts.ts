@@ -2,7 +2,7 @@ import { db } from "./db";
 import { isChoiceType } from "./ai/provider";
 import { calculateCandies, resultLevel } from "./scoring";
 import { achievementById, checkNewAchievements } from "./achievements";
-import { OPEN_GRACE_SEC, OPEN_QUESTION_SECONDS, TEST_GRACE_SEC, isLevel } from "./levels";
+import { TEST_GRACE_SEC } from "./levels";
 import { gradePendingAnswers } from "./grading/gradeOpen";
 
 export const attemptQuestionIds = (a: { questionIds: unknown }) => (Array.isArray(a.questionIds) ? (a.questionIds as string[]) : []);
@@ -34,12 +34,13 @@ export async function saveAnswer(
 }
 
 // Сколько секунд осталось на открытый вопрос (null — вопрос ещё не открывали).
-type OpenTimed = { level: string; openStarts: unknown };
+// limitSec — время на открытый вопрос этого уровня (getOpenSeconds в testSettings.ts).
+type OpenTimed = { openStarts: unknown };
 export const openStartsOf = (a: OpenTimed) => (a.openStarts && typeof a.openStarts === "object" ? (a.openStarts as Record<string, string>) : {});
-export function openSecondsLeft(a: OpenTimed, questionId: string, grace = 0): number | null {
+export function openSecondsLeft(a: OpenTimed, questionId: string, limitSec: number, grace = 0): number | null {
   const start = openStartsOf(a)[questionId];
-  if (!start || !isLevel(a.level)) return null;
-  return Math.round((new Date(start).getTime() + (OPEN_QUESTION_SECONDS[a.level] + grace) * 1000 - Date.now()) / 1000);
+  if (!start) return null;
+  return Math.round((new Date(start).getTime() + (limitSec + grace) * 1000 - Date.now()) / 1000);
 }
 
 // Тест ещё идёт: не завершён и время не вышло (без запаса на сеть — он только для приёма ответов).

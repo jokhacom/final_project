@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { levelInfo } from "@/lib/levels";
+import { LEVELS, OPEN_QUESTION_SECONDS, levelInfo, type LevelId } from "@/lib/levels";
 import { useAdminStatus } from "@/components/admin/useAdminStatus";
 
 type User = { id: string; name: string; username: string; role: string; leaderboard: { testsDone: number; bestCandy: number } | null };
@@ -23,6 +23,10 @@ export default function AdminHome() {
   const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
   const [qCount, setQCount] = useState("10");
   const [attemptLimit, setAttemptLimit] = useState("0");
+  // Время на один открытый вопрос по уровням, минуты (строки — чтобы можно было стереть и ввести 1.5).
+  const [openMin, setOpenMin] = useState<Record<LevelId, string>>(
+    Object.fromEntries(LEVELS.map((l) => [l.id, String(OPEN_QUESTION_SECONDS[l.id] / 60)])) as Record<LevelId, string>
+  );
   const status = useAdminStatus();
   const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const loadUsers = () => fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
@@ -63,6 +67,14 @@ export default function AdminHome() {
         if (qc) setQCount(qc.value);
         const al = list.find((s: any) => s.key === "test_attempt_limit");
         if (al) setAttemptLimit(al.value);
+        setOpenMin((prev) => {
+          const next = { ...prev };
+          for (const l of LEVELS) {
+            const v = list.find((s: any) => s.key === `open_question_min_${l.id}`);
+            if (v) next[l.id] = v.value;
+          }
+          return next;
+        });
       });
   }, []);
 
@@ -74,6 +86,7 @@ export default function AdminHome() {
       ["test_duration_min", minutes.trim()],
       ["test_question_count", qCount.trim()],
       ["test_attempt_limit", attemptLimit.trim() || "0"],
+      ...LEVELS.map((l) => [`open_question_min_${l.id}`, openMin[l.id].trim()]),
     ]) {
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -269,10 +282,36 @@ export default function AdminHome() {
               <span className="muted small">мин,</span>
               <input className="input" style={{ width: 80 }} type="number" min={0} value={attemptLimit} onChange={(e) => setAttemptLimit(e.target.value)} />
               <span className="muted small">попыток на уровень</span>
-              <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
-                Сохранить
-              </button>
             </div>
+          </div>
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Время на один открытый вопрос ✍️</div>
+              <div className="muted small">
+                Отдельный таймер на каждый вопрос с ответом своими словами, в минутах (можно дробно: 1.5). Когда время вышло, ответ сохраняется и
+                больше не меняется. Общее время теста — выше.
+              </div>
+            </div>
+            <div className="row">
+              {LEVELS.map((l) => (
+                <label key={l.id} className="row small" style={{ gap: 4 }}>
+                  <span className="muted">{l.id === "EXAM" ? "Экзамен" : l.label}</span>
+                  <input
+                    className="input"
+                    style={{ width: 70 }}
+                    inputMode="decimal"
+                    value={openMin[l.id]}
+                    onChange={(e) => setOpenMin({ ...openMin, [l.id]: e.target.value.replace(/[^\d.,]/g, "") })}
+                  />
+                </label>
+              ))}
+              <span className="muted small">мин</span>
+            </div>
+          </div>
+          <div className="row" style={{ marginBottom: 16, justifyContent: "flex-end" }}>
+            <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
+              Сохранить настройки теста
+            </button>
           </div>
           <div className="row between">
             <div>
