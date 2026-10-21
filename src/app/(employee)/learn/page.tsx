@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
+import { FIX_ERROR_SECONDS, LANGUAGE_ROUND, LANGUAGE_SECONDS, TRUE_FALSE_SECONDS, formatGameTime } from "@/lib/gameConstants";
 import { isPowerPoint, viewerUrl } from "@/lib/presentations";
 import { PdfViewer } from "@/components/PdfViewer";
 
@@ -52,7 +52,7 @@ export default function LearnPage() {
         <button className="card level-card" style={{ ["--level" as any]: "#00E5A0", textAlign: "left", font: "inherit" }} disabled={!counts.TRUE_FALSE} onClick={() => setGame("TRUE_FALSE")}>
           <div style={{ fontSize: 34 }}>✅❌</div>
           <div className="level-title">Можно или нельзя?</div>
-          <div className="muted">Так можно ответить клиенту? Решайте быстро — сразу увидите, почему.</div>
+          <div className="muted">Так можно ответить клиенту? {TRUE_FALSE_SECONDS} секунд на фразу — сразу увидите, почему.</div>
           <div className="level-meta">{counts.TRUE_FALSE ? "12 фраз за раунд" : "Скоро — фразы готовятся"}</div>
         </button>
         <button className="card level-card" style={{ ["--level" as any]: "#FFC93C", textAlign: "left", font: "inherit" }} disabled={!counts.LANGUAGE} onClick={() => setGame("LANGUAGE")}>
@@ -64,7 +64,7 @@ export default function LearnPage() {
         <button className="card level-card" style={{ ["--level" as any]: "#FF6FA5", textAlign: "left", font: "inherit" }} disabled={!counts.FIX_ERROR} onClick={() => setGame("FIX_ERROR")}>
           <div style={{ fontSize: 34 }}>🔍✏️</div>
           <div className="level-title">Найди и исправь ошибку</div>
-          <div className="muted">Сообщение или скриншот чата с ошибкой — напишите, как правильно, и сравните с образцом.</div>
+          <div className="muted">Сообщение или скриншот чата с ошибкой — напишите, как правильно, и сравните с образцом. {formatGameTime(FIX_ERROR_SECONDS)} на задание.</div>
           <div className="level-meta">{counts.FIX_ERROR ? `${Math.min(counts.FIX_ERROR, 12)} заданий за раунд` : "Скоро — задания готовятся"}</div>
         </button>
       </div>
@@ -184,6 +184,11 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
   const [draft, setDraft] = useState(""); // исправленный вариант в «Найди и исправь ошибку»
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(0);
+  // Таймер на одно задание: не успел — ответ засчитывается как ошибка.
+  const limit = kind === "FIX_ERROR" ? FIX_ERROR_SECONDS : TRUE_FALSE_SECONDS;
+  const [left, setLeft] = useState(limit);
+  const [timedOut, setTimedOut] = useState(false);
+  const answering = !!items && i < items.length && (kind === "FIX_ERROR" ? !flipped : picked === null);
 
   useEffect(() => {
     setItems(null);
@@ -193,18 +198,48 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
     setPicked(null);
     setFlipped(false);
     setDraft("");
-  }, [kind, round]);
+    setLeft(limit);
+    setTimedOut(false);
+  }, [kind, round, limit]);
+
+  useEffect(() => {
+    if (!answering) return;
+    const t = setInterval(() => setLeft((s) => s - 1), 1000);
+    return () => clearInterval(t);
+  }, [answering, i]);
+
+  useEffect(() => {
+    if (answering && left <= 0) {
+      setTimedOut(true);
+      setPicked(false);
+      setFlipped(true);
+    }
+  }, [answering, left]);
 
   if (!items) return <main className="container narrow"><div className="card center" style={{ padding: 40 }}><div className="spinner" /></div></main>;
 
   const done = i >= items.length;
   const item = items[i];
+  // Время сбрасываем вместе с переходом, иначе следующее задание на один кадр видело бы 0 секунд.
   const next = () => {
+    setLeft(limit);
+    setTimedOut(false);
     setI(i + 1);
     setPicked(null);
     setFlipped(false);
     setDraft("");
   };
+  const timerRow = (
+    <>
+      <div className="row between">
+        <span className="muted small">{kind === "FIX_ERROR" ? "Найдите ошибку и напишите, как правильно" : "Так можно ответить клиенту?"}</span>
+        <span className={`timer ${answering && left <= Math.min(10, limit / 3) ? "danger" : ""}`}>⏱ {formatGameTime(left)}</span>
+      </div>
+      <div className="lang-timebar">
+        <div style={{ width: `${(Math.max(left, 0) / limit) * 100}%` }} />
+      </div>
+    </>
+  );
 
   return (
     <main className="container narrow">
@@ -230,7 +265,7 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
       ) : kind === "FIX_ERROR" ? (
         // Свободный ответ сравнивает сам сотрудник: показываем образец и спрашиваем, совпало ли.
         <div className="card stack mt">
-          <div className="muted small">Найдите ошибку и напишите, как правильно</div>
+          {timerRow}
           {item.image && <img src={item.image} alt="Скриншот чата" className="question-image" />}
           {item.prompt && <div className="question-text">«{item.prompt}»</div>}
           <textarea className="textarea" placeholder="Ваш исправленный вариант" value={draft} onChange={(e) => setDraft(e.target.value)} disabled={flipped} />
@@ -254,8 +289,9 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
           ) : (
             <>
               <div className={`answer-box ${picked ? "ok" : "bad"}`}>
-                {picked ? "✅ Отлично! " : "Запомните правильный вариант: "}
+                {timedOut ? "⏰ Время вышло. Правильный вариант: " : picked ? "✅ Отлично! " : "Запомните правильный вариант: "}
                 {!picked && item.answer}
+                {timedOut && item.explanation && <div style={{ marginTop: 6 }}>💡 {item.explanation}</div>}
               </div>
               <button className="btn btn-primary btn-block" onClick={next}>Дальше →</button>
             </>
@@ -263,7 +299,7 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
         </div>
       ) : (
         <div className="card stack mt">
-          <div className="muted small">Так можно ответить клиенту?</div>
+          {timerRow}
           <div className="question-text">«{item.prompt}»</div>
           {picked === null ? (
             <div className="grid grid-2">
@@ -272,8 +308,8 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
             </div>
           ) : (
             <>
-              <div className={`answer-box ${picked === item.isCorrect ? "ok" : "bad"}`}>
-                {picked === item.isCorrect ? "✅ Верно! " : "❌ Не совсем. "}
+              <div className={`answer-box ${!timedOut && picked === item.isCorrect ? "ok" : "bad"}`}>
+                {timedOut ? "⏰ Время вышло. " : picked === item.isCorrect ? "✅ Верно! " : "❌ Не совсем. "}
                 {item.isCorrect ? "Так говорить можно." : "Так говорить нельзя."}
                 {item.explanation && <div style={{ marginTop: 6 }}>💡 {item.explanation}</div>}
               </div>
