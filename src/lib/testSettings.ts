@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { LEVELS, OPEN_QUESTION_SECONDS, type LevelId } from "./levels";
+import { GAME_TIMER_DEFAULTS, type GameTimerKind } from "./gameConstants";
 
 // Время на тест настраивается в админ-панели (Setting "test_duration_min").
 export const DEFAULT_TEST_MINUTES = 15;
@@ -62,6 +63,27 @@ export async function getOpenSeconds(): Promise<Record<LevelId, number>> {
   for (const l of LEVELS) {
     const n = Number(rows.find((r) => r.key === openQuestionKey(l.id))?.value);
     if (isValidOpenMinutes(n)) result[l.id] = Math.round(n * 60);
+  }
+  return result;
+}
+
+// Максимум пользователей сайта (кроме суперадминистратора), Setting "max_users". 0 — без ограничений.
+// Когда лимит достигнут, новая регистрация закрыта; уже созданные аккаунты работают.
+export async function getUserLimit(): Promise<number> {
+  const s = await db.setting.findUnique({ where: { key: "max_users" } });
+  const n = Number(s?.value);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+// Таймеры в обучающих играх, секунды на один ответ (Setting "game_seconds_<ИГРА>").
+export const isValidGameSeconds = (n: number) => Number.isInteger(n) && n >= 3 && n <= 3600;
+export async function getGameTimers(): Promise<Record<GameTimerKind, number>> {
+  const kinds = Object.keys(GAME_TIMER_DEFAULTS) as GameTimerKind[];
+  const rows = await db.setting.findMany({ where: { key: { in: kinds.map((k) => `game_seconds_${k}`) } } });
+  const result: Record<GameTimerKind, number> = { ...GAME_TIMER_DEFAULTS };
+  for (const k of kinds) {
+    const n = Number(rows.find((r) => r.key === `game_seconds_${k}`)?.value);
+    if (isValidGameSeconds(n)) result[k] = n;
   }
   return result;
 }

@@ -27,9 +27,20 @@ export default function AdminHome() {
   const [openMin, setOpenMin] = useState<Record<LevelId, string>>(
     Object.fromEntries(LEVELS.map((l) => [l.id, String(OPEN_QUESTION_SECONDS[l.id] / 60)])) as Record<LevelId, string>
   );
+  // Максимум пользователей сайта (0 — без ограничений) и сколько их сейчас (без суперадминистратора).
+  const [maxUsers, setMaxUsers] = useState("0");
+  const [userCount, setUserCount] = useState(0);
+  // Таймеры в играх, секунды на один ответ.
+  const [gameSec, setGameSec] = useState<Record<string, string>>({ TRUE_FALSE: "10", FIX_ERROR: "90", LANGUAGE: "10" });
   const status = useAdminStatus();
   const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const loadUsers = () => fetch("/api/admin/users").then((r) => r.json()).then((d) => setUsers(d.users ?? []));
+  const loadUsers = () =>
+    fetch("/api/admin/users")
+      .then((r) => r.json())
+      .then((d) => {
+        setUsers(d.users ?? []);
+        setUserCount(d.counted ?? 0);
+      });
 
   async function userAction(u: User, method: "PATCH" | "DELETE", body?: object, okText?: string) {
     setUserMsg(null);
@@ -67,6 +78,16 @@ export default function AdminHome() {
         if (qc) setQCount(qc.value);
         const al = list.find((s: any) => s.key === "test_attempt_limit");
         if (al) setAttemptLimit(al.value);
+        const mu = list.find((s: any) => s.key === "max_users");
+        if (mu) setMaxUsers(mu.value);
+        setGameSec((prev) => {
+          const next = { ...prev };
+          for (const k of Object.keys(prev)) {
+            const v = list.find((s: any) => s.key === `game_seconds_${k}`);
+            if (v) next[k] = v.value;
+          }
+          return next;
+        });
         setOpenMin((prev) => {
           const next = { ...prev };
           for (const l of LEVELS) {
@@ -87,6 +108,8 @@ export default function AdminHome() {
       ["test_question_count", qCount.trim()],
       ["test_attempt_limit", attemptLimit.trim() || "0"],
       ...LEVELS.map((l) => [`open_question_min_${l.id}`, openMin[l.id].trim()]),
+      ["max_users", maxUsers.trim() || "0"],
+      ...Object.entries(gameSec).map(([k, v]) => [`game_seconds_${k}`, v.trim()]),
     ]) {
       const res = await fetch("/api/settings", {
         method: "POST",
@@ -308,9 +331,54 @@ export default function AdminHome() {
               <span className="muted small">мин</span>
             </div>
           </div>
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Таймеры в играх 🎮</div>
+              <div className="muted small">Секунд на один ответ в «Обучении». Не успел — ответ засчитывается как неверный.</div>
+            </div>
+            <div className="row">
+              {[
+                ["TRUE_FALSE", "Можно или нельзя?"],
+                ["FIX_ERROR", "Найди и исправь"],
+                ["LANGUAGE", "Грамотность"],
+              ].map(([k, label]) => (
+                <label key={k} className="row small" style={{ gap: 4 }}>
+                  <span className="muted">{label}</span>
+                  <input
+                    className="input"
+                    style={{ width: 70 }}
+                    inputMode="numeric"
+                    value={gameSec[k]}
+                    onChange={(e) => setGameSec({ ...gameSec, [k]: e.target.value.replace(/\D/g, "") })}
+                  />
+                </label>
+              ))}
+              <span className="muted small">сек</span>
+            </div>
+          </div>
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Пользователи сайта 👥</div>
+              <div className="muted small">
+                Максимум аккаунтов (кроме суперадминистратора), 0 — без ограничений. Когда лимит достигнут, новая регистрация закрывается; уже
+                созданные аккаунты работают. Сейчас: <strong>{userCount}</strong>
+                {Number(maxUsers) > 0 ? ` из ${maxUsers}` : ""}.
+              </div>
+            </div>
+            <div className="row">
+              <input
+                className="input"
+                style={{ width: 90 }}
+                inputMode="numeric"
+                value={maxUsers}
+                onChange={(e) => setMaxUsers(e.target.value.replace(/\D/g, ""))}
+              />
+              <span className="muted small">пользователей</span>
+            </div>
+          </div>
           <div className="row" style={{ marginBottom: 16, justifyContent: "flex-end" }}>
             <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
-              Сохранить настройки теста
+              Сохранить настройки
             </button>
           </div>
           <div className="row between">

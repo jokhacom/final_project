@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { SUPERADMIN_USERNAME } from "@/lib/auth";
+import { getUserLimit } from "@/lib/testSettings";
 
 // Раздел 1 запроса: каждый сотрудник входит только по логину и паролю,
 // аккаунт сохраняется в базе и не исчезает после перезапуска сайта.
@@ -22,6 +23,12 @@ export async function POST(req: NextRequest) {
     }
     if (username.trim().toLowerCase() === SUPERADMIN_USERNAME.toLowerCase()) {
       return NextResponse.json({ error: "Этот логин зарезервирован" }, { status: 400 });
+    }
+
+    // Лимит пользователей сайта задаёт суперадминистратор на «Обзоре».
+    const limit = await getUserLimit();
+    if (limit && (await db.user.count({ where: { role: { not: "SUPERADMIN" } } })) >= limit) {
+      return NextResponse.json({ error: "Регистрация закрыта: достигнут лимит пользователей. Обратитесь к администратору." }, { status: 403 });
     }
 
     const existing = await db.user.findUnique({ where: { username: username.trim() } });
