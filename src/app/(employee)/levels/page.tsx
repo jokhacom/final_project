@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { LEVELS } from "@/lib/levels";
+import { LEVELS, OPEN_QUESTION_SECONDS } from "@/lib/levels";
 import { formatPenalty } from "@/lib/scoring";
 
 // «1 вопрос», «3 вопроса», «10 вопросов»
@@ -107,6 +107,10 @@ export default function LevelsPage() {
             ошибка — −1, грамматическая — −1.
           </li>
           <li>Вставлять текст в открытые ответы нельзя — пишите своими словами.</li>
+          <li>
+            На каждый открытый вопрос — свой таймер ✍️: Новичок — {OPEN_QUESTION_SECONDS.BEGINNER / 60} мин, Middle — {OPEN_QUESTION_SECONDS.MIDDLE / 60} мин,
+            Professional — {OPEN_QUESTION_SECONDS.PROFESSIONAL / 60} мин, экзамен — {OPEN_QUESTION_SECONDS.EXAM / 60} мин.
+          </li>
           <li>Больше 90 🍬 — сертификат. 95+ на уровне Professional — достижение «Эксперт ГЦО» 👑.</li>
         </ul>
       </div>
