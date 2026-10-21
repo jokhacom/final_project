@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ImagePicker } from "@/components/admin/ImagePicker";
-import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
+import { LANGUAGE_ROUND } from "@/lib/gameConstants";
 import { CHUNK_BYTES, MAX_PRESENTATION_MB, PRESENTATION_TYPES, extOf, viewerUrl } from "@/lib/presentations";
 
 type Presentation = { id: string; title: string; description: string | null; fileName: string; url: string | null; size: number; order: number; createdAt: string };
@@ -256,7 +256,7 @@ export default function AdminLearningPage() {
               )}
             </div>
             <div className="muted small">
-              Русский и узбекский — отдельные раунды по {LANGUAGE_ROUND} вопросов, {LANGUAGE_SECONDS} секунд на вопрос. Готовые вопросы можно добавить один раз — повторно не дублируются.
+              Русский и узбекский — отдельные раунды по {LANGUAGE_ROUND} вопросов; время на вопрос — в «Обзоре» → «Таймеры в играх». Готовые вопросы можно добавить один раз — повторно не дублируются.
               {lang === "uz" && " Узбекские — по правилам орфографии (imlo.uz): oʻ, gʻ, tutuq belgisi ʼ."}
             </div>
           </div>

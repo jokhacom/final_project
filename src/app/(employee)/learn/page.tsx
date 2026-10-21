@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LANGUAGE_ROUND, LANGUAGE_SECONDS } from "@/lib/gameConstants";
+import { GAME_TIMER_DEFAULTS, LANGUAGE_ROUND, type GameTimerKind } from "@/lib/gameConstants";
 import { isPowerPoint, viewerUrl } from "@/lib/presentations";
 import { PdfViewer } from "@/components/PdfViewer";
 
@@ -30,17 +30,19 @@ export default function LearnPage() {
   const [languages, setLanguages] = useState<Record<string, number>>({});
   const [viewing, setViewing] = useState<Presentation | null>(null);
   const [game, setGame] = useState<Kind | null>(null);
+  const [timers, setTimers] = useState<Record<GameTimerKind, number>>({ ...GAME_TIMER_DEFAULTS });
 
   useEffect(() => {
     fetch("/api/learning/presentations").then((r) => r.json()).then((d) => setPresentations(d.items ?? []));
     fetch("/api/learning/games").then((r) => r.json()).then((d) => {
       setCounts(d.counts ?? {});
       setLanguages(d.languages ?? {});
+      if (d.timers) setTimers(d.timers);
     });
   }, []);
 
-  if (game === "LANGUAGE") return <LanguageGame counts={languages} onExit={() => setGame(null)} />;
-  if (game) return <Game kind={game} onExit={() => setGame(null)} />;
+  if (game === "LANGUAGE") return <LanguageGame counts={languages} seconds={timers.LANGUAGE} onExit={() => setGame(null)} />;
+  if (game) return <Game kind={game} seconds={timers[game]} onExit={() => setGame(null)} />;
 
   return (
     <main className="container">
@@ -52,13 +54,13 @@ export default function LearnPage() {
         <button className="card level-card" style={{ ["--level" as any]: "#00E5A0", textAlign: "left", font: "inherit" }} disabled={!counts.TRUE_FALSE} onClick={() => setGame("TRUE_FALSE")}>
           <div style={{ fontSize: 34 }}>✅❌</div>
           <div className="level-title">Можно или нельзя?</div>
-          <div className="muted">Так можно ответить клиенту? Решайте быстро — сразу увидите, почему.</div>
+          <div className="muted">Так можно ответить клиенту? Решайте быстро — {timers.TRUE_FALSE} секунд на ответ, сразу увидите, почему.</div>
           <div className="level-meta">{counts.TRUE_FALSE ? "12 фраз за раунд" : "Скоро — фразы готовятся"}</div>
         </button>
         <button className="card level-card" style={{ ["--level" as any]: "#FFC93C", textAlign: "left", font: "inherit" }} disabled={!counts.LANGUAGE} onClick={() => setGame("LANGUAGE")}>
           <div style={{ fontSize: 34 }}>✍️⏱️</div>
           <div className="level-title">Грамотность</div>
-          <div className="muted">Предлоги, окончания, слитно или раздельно, орфография. Русский или узбекский — {LANGUAGE_SECONDS} секунд на вопрос!</div>
+          <div className="muted">Предлоги, окончания, слитно или раздельно, орфография. Русский или узбекский — {timers.LANGUAGE} секунд на вопрос!</div>
           <div className="level-meta">{counts.LANGUAGE ? `${LANGUAGE_ROUND} вопросов за раунд` : "Скоро — вопросы готовятся"}</div>
         </button>
         <button className="card level-card" style={{ ["--level" as any]: "#FF6FA5", textAlign: "left", font: "inherit" }} disabled={!counts.FIX_ERROR} onClick={() => setGame("FIX_ERROR")}>
@@ -176,7 +178,36 @@ function PresentationModal({ p, onClose }: { p: Presentation; onClose: () => voi
   );
 }
 
-function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
+// Сколько секунд осталось на текущий ответ: таймер перезапускается, когда меняется key, и стоит, пока running = false.
+function useCountdown(seconds: number, key: string, running: boolean) {
+  const [left, setLeft] = useState(seconds);
+  useEffect(() => setLeft(seconds), [seconds, key]);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [running, key]);
+  return left;
+}
+
+function TimeBar({ left, seconds }: { left: number; seconds: number }) {
+  const fmt = left >= 60 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : String(left);
+  return (
+    <>
+      <div className="row between">
+        <span className="muted small">Время на ответ</span>
+        <span className={`timer ${left <= 3 ? "danger" : ""}`}>⏱ {fmt}</span>
+      </div>
+      <div className="lang-timebar">
+        <div style={{ width: `${(left / seconds) * 100}%` }} />
+      </div>
+    </>
+  );
+}
+
+// «Можно или нельзя?» и «Найди и исправь ошибку». На каждый ответ — таймер (seconds): не успел —
+// ответ засчитывается как неверный и показывается правильный.
+function Game({ kind, seconds, onExit }: { kind: Kind; seconds: number; onExit: () => void }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<boolean | null>(null); // выбор в «Можно или нельзя?»
@@ -184,9 +215,11 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
   const [draft, setDraft] = useState(""); // исправленный вариант в «Найди и исправь ошибку»
   const [score, setScore] = useState(0);
   const [round, setRound] = useState(0);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     setItems(null);
+    setTimedOut(false);
     fetch(`/api/learning/games?kind=${kind}`).then((r) => r.json()).then((d) => setItems(d.items ?? []));
     setI(0);
     setScore(0);
@@ -194,6 +227,21 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
     setFlipped(false);
     setDraft("");
   }, [kind, round]);
+
+  const answering = !!items && i < items.length && (kind === "TRUE_FALSE" ? picked === null : !flipped);
+  const left = useCountdown(seconds, `${round}:${i}`, answering);
+
+  // Время вышло: «Можно или нельзя?» — неверно; «Найди и исправь» — показываем правильный вариант,
+  // пустой ответ сразу считается ошибкой, написанный — сотрудник сравнивает сам.
+  useEffect(() => {
+    if (!answering || left > 0 || !items) return;
+    setTimedOut(true);
+    if (kind === "TRUE_FALSE") setPicked(!items[i].isCorrect);
+    else {
+      setFlipped(true);
+      if (!draft.trim()) setPicked(false);
+    }
+  }, [answering, left, items, i, kind, draft]);
 
   if (!items) return <main className="container narrow"><div className="card center" style={{ padding: 40 }}><div className="spinner" /></div></main>;
 
@@ -204,6 +252,7 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
     setPicked(null);
     setFlipped(false);
     setDraft("");
+    setTimedOut(false);
   };
 
   return (
@@ -230,6 +279,8 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
       ) : kind === "FIX_ERROR" ? (
         // Свободный ответ сравнивает сам сотрудник: показываем образец и спрашиваем, совпало ли.
         <div className="card stack mt">
+          {answering && <TimeBar left={left} seconds={seconds} />}
+          {timedOut && <div className="alert alert-error">⏰ Время вышло</div>}
           <div className="muted small">Найдите ошибку и напишите, как правильно</div>
           {item.image && <img src={item.image} alt="Скриншот чата" className="question-image" />}
           {item.prompt && <div className="question-text">«{item.prompt}»</div>}
@@ -263,6 +314,7 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
         </div>
       ) : (
         <div className="card stack mt">
+          {answering && <TimeBar left={left} seconds={seconds} />}
           <div className="muted small">Так можно ответить клиенту?</div>
           <div className="question-text">«{item.prompt}»</div>
           {picked === null ? (
@@ -273,7 +325,7 @@ function Game({ kind, onExit }: { kind: Kind; onExit: () => void }) {
           ) : (
             <>
               <div className={`answer-box ${picked === item.isCorrect ? "ok" : "bad"}`}>
-                {picked === item.isCorrect ? "✅ Верно! " : "❌ Не совсем. "}
+                {timedOut ? "⏰ Время вышло. " : picked === item.isCorrect ? "✅ Верно! " : "❌ Не совсем. "}
                 {item.isCorrect ? "Так говорить можно." : "Так говорить нельзя."}
                 {item.explanation && <div style={{ marginTop: 6 }}>💡 {item.explanation}</div>}
               </div>
@@ -301,8 +353,8 @@ const LANG_LABEL: Record<string, { flag: string; name: string }> = {
 };
 
 // «Грамотность»: сначала выбор языка (русский и узбекский — отдельно, не вперемешку),
-// затем раунд: на каждый вопрос LANGUAGE_SECONDS секунд, не успел — ответ засчитывается как ошибка.
-function LanguageGame({ counts, onExit }: { counts: Record<string, number>; onExit: () => void }) {
+// затем раунд: на каждый вопрос seconds секунд (настройка «Таймеры в играх»), не успел — ответ засчитывается как ошибка.
+function LanguageGame({ counts, seconds, onExit }: { counts: Record<string, number>; seconds: number; onExit: () => void }) {
   const [language, setLanguage] = useState<"ru" | "uz" | null>(null);
 
   if (!language) {
@@ -310,7 +362,7 @@ function LanguageGame({ counts, onExit }: { counts: Record<string, number>; onEx
       <main className="container narrow">
         <button className="btn btn-ghost btn-sm" onClick={onExit}>← К обучению</button>
         <h1 className="mt">✍️ Грамотность</h1>
-        <p className="muted">Выберите язык. На каждый вопрос — {LANGUAGE_SECONDS} секунд.</p>
+        <p className="muted">Выберите язык. На каждый вопрос — {seconds} секунд.</p>
         <div className="grid grid-2">
           {(["ru", "uz"] as const).map((l) => (
             <button key={l} className="card level-card" style={{ ["--level" as any]: l === "ru" ? "#7C4DFF" : "#00E5A0", textAlign: "left", font: "inherit" }} disabled={!counts[l]} onClick={() => setLanguage(l)}>
@@ -323,15 +375,15 @@ function LanguageGame({ counts, onExit }: { counts: Record<string, number>; onEx
       </main>
     );
   }
-  return <LanguageRound language={language} onBack={() => setLanguage(null)} onExit={onExit} />;
+  return <LanguageRound language={language} seconds={seconds} onBack={() => setLanguage(null)} onExit={onExit} />;
 }
 
-function LanguageRound({ language, onBack, onExit }: { language: "ru" | "uz"; onBack: () => void; onExit: () => void }) {
+function LanguageRound({ language, seconds, onBack, onExit }: { language: "ru" | "uz"; seconds: number; onBack: () => void; onExit: () => void }) {
   const [items, setItems] = useState<LangItem[] | null>(null);
   const [round, setRound] = useState(0);
   const [i, setI] = useState(0);
   const [picked, setPicked] = useState<number | null>(null); // -1 — время вышло
-  const [left, setLeft] = useState(LANGUAGE_SECONDS);
+  const [left, setLeft] = useState(seconds);
   const [score, setScore] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -340,7 +392,7 @@ function LanguageRound({ language, onBack, onExit }: { language: "ru" | "uz"; on
     setI(0);
     setScore(0);
     setPicked(null);
-    setLeft(LANGUAGE_SECONDS);
+    setLeft(seconds);
     fetch(`/api/learning/games?kind=LANGUAGE&language=${language}`).then((r) => r.json()).then((d) => setItems(d.items ?? []));
   }, [language, round]);
 
@@ -350,7 +402,7 @@ function LanguageRound({ language, onBack, onExit }: { language: "ru" | "uz"; on
 
   useEffect(() => {
     if (!item) return;
-    setLeft(LANGUAGE_SECONDS);
+    setLeft(seconds);
     timer.current = setInterval(() => setLeft((s) => s - 1), 1000);
     return () => {
       if (timer.current) clearInterval(timer.current);
@@ -367,7 +419,7 @@ function LanguageRound({ language, onBack, onExit }: { language: "ru" | "uz"; on
   // Время сбрасываем вместе с переходом, иначе после «время вышло» следующий вопрос
   // на один кадр видел бы 0 секунд и тоже засчитывался как просроченный.
   function next() {
-    setLeft(LANGUAGE_SECONDS);
+    setLeft(seconds);
     setPicked(null);
     setI(i + 1);
   }
@@ -413,7 +465,7 @@ function LanguageRound({ language, onBack, onExit }: { language: "ru" | "uz"; on
               <span className={`timer ${picked === null && left <= 3 ? "danger" : ""}`}>⏱ {Math.max(left, 0)}</span>
             </div>
             <div className="lang-timebar">
-              <div style={{ width: `${(Math.max(left, 0) / LANGUAGE_SECONDS) * 100}%` }} />
+              <div style={{ width: `${(Math.max(left, 0) / seconds) * 100}%` }} />
             </div>
             <div className="question-text">{item.prompt}</div>
             <div className="stack" style={{ gap: 8 }}>

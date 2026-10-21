@@ -5,7 +5,7 @@ import { parseImage } from "./questions";
 export const GAME_KINDS = ["TRUE_FALSE", "FIX_ERROR", "LANGUAGE"] as const;
 export const isGameKind = (k: unknown): k is GameKind => GAME_KINDS.includes(k as (typeof GAME_KINDS)[number]);
 
-export { LANGUAGE_ROUND, LANGUAGE_SECONDS, isGameLanguage } from "./gameConstants";
+export { LANGUAGE_ROUND, isGameLanguage } from "./gameConstants";
 import { isGameLanguage } from "./gameConstants";
 
 type GameItemData = {

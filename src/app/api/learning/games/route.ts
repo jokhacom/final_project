@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdmin, requireAdmin, requireUser } from "@/lib/session";
+import { getGameTimers } from "@/lib/testSettings";
 import { GAME_KINDS, LANGUAGE_ROUND, isGameKind, isGameLanguage, validateGameItem } from "@/lib/games";
 
 function shuffle<T>(arr: T[]): T[] {
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
     items: all ? items : shuffle(items).slice(0, kind === "LANGUAGE" ? LANGUAGE_ROUND : 12),
     counts: Object.fromEntries(counts.map((c) => [c.kind, c._count._all])),
     languages: Object.fromEntries(langCounts.map((c) => [c.language, c._count._all])),
+    timers: await getGameTimers(), // секунд на один ответ в каждой игре
   });
 }
 

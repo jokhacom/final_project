@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireSuperadmin } from "@/lib/session";
-import { isValidOpenMinutes, isValidQuestionCount, MAX_QUESTION_COUNT, MAX_TEST_MINUTES, MIN_TEST_MINUTES } from "@/lib/testSettings";
+import { isValidGameSeconds, isValidOpenMinutes, isValidQuestionCount, MAX_QUESTION_COUNT, MAX_TEST_MINUTES, MIN_TEST_MINUTES } from "@/lib/testSettings";
 
 // Раздел 23: изменения дизайна/текстов/правил без кода.
 // Примеры ключей: "daily_quiz_enabled", "theme_accent_color", "welcome_text".
@@ -25,6 +25,13 @@ export async function POST(req: NextRequest) {
   }
   if (String(key).startsWith("open_question_min_") && !isValidOpenMinutes(Number(String(value).replace(",", ".")))) {
     return NextResponse.json({ error: "Время на открытый вопрос — от 0,25 до 60 минут (можно дробно, например 1.5)" }, { status: 400 });
+  }
+  if (key === "max_users") {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0) return NextResponse.json({ error: "Пользователей — целое число, 0 — без ограничений" }, { status: 400 });
+  }
+  if (String(key).startsWith("game_seconds_") && !isValidGameSeconds(Number(value))) {
+    return NextResponse.json({ error: "Время в игре — целое число секунд от 3 до 3600" }, { status: 400 });
   }
   if (key === "test_attempt_limit") {
     const n = Number(value);
