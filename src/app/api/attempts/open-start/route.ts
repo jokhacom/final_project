@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { attemptQuestionIds, isRunning, openSecondsLeft, openStartsOf } from "@/lib/attempts";
+import { getOpenSeconds } from "@/lib/testSettings";
+import { isLevel } from "@/lib/levels";
 
 // Сотрудник открыл открытый вопрос: запускаем его отдельный таймер (только в первый раз)
 // и возвращаем, сколько секунд на него осталось.
@@ -23,5 +25,6 @@ export async function POST(req: NextRequest) {
       data: { openStarts: { ...openStartsOf(attempt), [questionId]: new Date().toISOString() } },
     });
   }
-  return NextResponse.json({ secondsLeft: openSecondsLeft(current, questionId) });
+  const limits = await getOpenSeconds();
+  return NextResponse.json({ secondsLeft: isLevel(current.level) ? openSecondsLeft(current, questionId, limits[current.level]) : null });
 }

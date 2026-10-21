@@ -17,6 +17,13 @@
   --warning: #e0a400;
   --shadow: 0 10px 30px rgba(124, 77, 255, 0.14);
   --radius: 20px;
+  /* Графики аналитики: проверены на различимость (в т.ч. при дальтонизме) и контраст */
+  --chart-1: #7c4dff;
+  --chart-grid: rgba(42, 23, 69, 0.1);
+  --lvl-BEGINNER: #00b67f;
+  --lvl-MIDDLE: #d19a00;
+  --lvl-PROFESSIONAL: #e84d8a;
+  --lvl-EXAM: #7c4dff;
   color-scheme: light;
 }
 
@@ -34,6 +41,12 @@
   --danger-bg: rgba(255, 107, 133, 0.14);
   --warning: #ffc93c;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --chart-1: #8c6bff;
+  --chart-grid: rgba(255, 255, 255, 0.1);
+  --lvl-BEGINNER: #00a372;
+  --lvl-MIDDLE: #b3820c;
+  --lvl-PROFESSIONAL: #e04a88;
+  --lvl-EXAM: #8c6bff;
   color-scheme: dark;
 }
 
@@ -260,3 +273,16 @@ body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (
 /* Тест: навигация по вопросам */
 .seg-btn { border: 0; padding: 0; cursor: pointer; height: 10px; }
 .test-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+
+/* Графики */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.chart-grid { stroke: var(--chart-grid); stroke-width: 1; }
+.chart-axis { fill: var(--muted); font-size: 11px; }
+.chart-bar { fill: var(--chart-1); }
+.chart-line { fill: none; stroke: var(--chart-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--chart-1); stroke: var(--surface-strong); stroke-width: 2; }
+.chart-cross { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-tip { position: absolute; transform: translate(-50%, calc(-100% - 10px)); pointer-events: none; white-space: nowrap; background: var(--surface-strong); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow); border-radius: 10px; padding: 6px 10px; font-size: 12px; font-weight: 700; z-index: 5; }
+.barlist-track { height: 10px; border-radius: 99px; background: var(--chart-grid); margin-top: 6px; overflow: hidden; }
+.barlist-fill { height: 100%; border-radius: 99px; }

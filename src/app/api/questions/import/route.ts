@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { contentDisposition } from "@/lib/download";
 import ExcelJS from "exceljs";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
@@ -94,7 +95,7 @@ export async function GET() {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent("шаблон-вопросов.xlsx")}"`,
+      "Content-Disposition": contentDisposition("шаблон-вопросов.xlsx", "questions-template.xlsx"),
     },
   });
 }

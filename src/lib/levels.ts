@@ -13,7 +13,8 @@ export const isLevel = (id: unknown): id is LevelId => LEVELS.some((l) => l.id =
 
 // Отдельный таймер на каждый открытый вопрос (ответ своими словами): запускается, когда вопрос
 // открыт впервые, и идёт, даже если уйти на другой вопрос. Когда вышло — ответ больше не меняется.
-export const OPEN_QUESTION_SECONDS: Record<LevelId, number> = { BEGINNER: 180, MIDDLE: 120, PROFESSIONAL: 60, EXAM: 120 };
+// Это значения по умолчанию; суперадмин меняет их на «Обзоре» (Setting "open_question_min_<УРОВЕНЬ>").
+export const OPEN_QUESTION_SECONDS: Record<LevelId, number> = { BEGINNER: 180, MIDDLE: 120, PROFESSIONAL: 60, EXAM: 90 };
 export const OPEN_GRACE_SEC = 15; // запас на сеть при сохранении ответа в последнюю секунду
 
 // Запас на сетевые задержки и проверку последнего ответа ИИ.

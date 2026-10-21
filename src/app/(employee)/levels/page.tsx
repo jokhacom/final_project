@@ -14,6 +14,9 @@ function plural(n: number) {
   return "вопросов";
 }
 
+// 90 секунд → «1,5 мин».
+const mins = (sec: number) => `${(sec / 60).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} мин`;
+
 export default function LevelsPage() {
   const { data: session } = useSession();
   const firstName = session?.user?.name?.split(" ")[0];
@@ -23,6 +26,7 @@ export default function LevelsPage() {
   const [inProgress, setInProgress] = useState<Record<string, boolean>>({});
   const [minutes, setMinutes] = useState(15);
   const [count, setCount] = useState(10);
+  const [openSeconds, setOpenSeconds] = useState(OPEN_QUESTION_SECONDS);
 
   useEffect(() => {
     fetch("/api/levels")
@@ -34,6 +38,7 @@ export default function LevelsPage() {
         setInProgress(Object.fromEntries((d.levels ?? []).map((l: { id: string; inProgress: boolean }) => [l.id, l.inProgress])));
         if (d.minutes) setMinutes(d.minutes);
         if (d.count) setCount(d.count);
+        if (d.openSeconds) setOpenSeconds(d.openSeconds);
       })
       .catch(() => setReady(null));
   }, []);
@@ -108,8 +113,8 @@ export default function LevelsPage() {
           </li>
           <li>Вставлять текст в открытые ответы нельзя — пишите своими словами.</li>
           <li>
-            На каждый открытый вопрос — свой таймер ✍️: Новичок — {OPEN_QUESTION_SECONDS.BEGINNER / 60} мин, Middle — {OPEN_QUESTION_SECONDS.MIDDLE / 60} мин,
-            Professional — {OPEN_QUESTION_SECONDS.PROFESSIONAL / 60} мин, экзамен — {OPEN_QUESTION_SECONDS.EXAM / 60} мин.
+            На каждый открытый вопрос — свой таймер ✍️: Новичок — {mins(openSeconds.BEGINNER)}, Middle — {mins(openSeconds.MIDDLE)},
+            Professional — {mins(openSeconds.PROFESSIONAL)}, экзамен — {mins(openSeconds.EXAM)}.
           </li>
           <li>Больше 90 🍬 — сертификат. 95+ на уровне Professional — достижение «Эксперт ГЦО» 👑.</li>
         </ul>
