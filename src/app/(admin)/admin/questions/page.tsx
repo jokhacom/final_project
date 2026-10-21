@@ -108,6 +108,23 @@ export default function QuestionsPage() {
     load();
   }
 
+  // Архив: удалить навсегда все показанные вопросы.
+  async function deleteAllArchived() {
+    const ids = (questions ?? []).map((q) => q.id);
+    if (!ids.length || !confirm(`Удалить навсегда все вопросы из архива (${ids.length})? Вернуть их будет нельзя, ответы сотрудников на них тоже удалятся.`)) return;
+    setBusy("bulk");
+    setError(null);
+    const res = await fetch("/api/questions/manual", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) setError(data.error ?? "Ошибка");
+    load();
+  }
+
   const counts = (questions ?? []).reduce<Record<string, number>>((acc, q) => {
     acc[q.level] = (acc[q.level] ?? 0) + 1;
     return acc;
@@ -197,6 +214,11 @@ export default function QuestionsPage() {
               ? `↩ Вернуть все в тесты (${questions.length})`
               : `🗄 Убрать в архив все показанные (${questions.length})`}
           </button>
+          {showArchive && (
+            <button className="btn btn-danger btn-sm" disabled={busy === "bulk"} onClick={deleteAllArchived}>
+              🗑 Удалить все из архива ({questions.length})
+            </button>
+          )}
           {!showArchive && !level && <span className="muted small">Чтобы убрать только один уровень, сначала выберите его в списке.</span>}
         </div>
       )}

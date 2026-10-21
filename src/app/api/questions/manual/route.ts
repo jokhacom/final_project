@@ -49,3 +49,20 @@ export async function PATCH(req: NextRequest) {
   });
   return NextResponse.json({ updated: r.count });
 }
+
+// Удалить навсегда несколько вопросов из архива: { ids: [...] }. Удаляются только вопросы,
+// которые уже в архиве, вместе с ответами сотрудников на них (как при удалении одного вопроса).
+export async function DELETE(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
+
+  const { ids } = await req.json();
+  if (!Array.isArray(ids) || !ids.length) return NextResponse.json({ error: "Нужны ids" }, { status: 400 });
+  const archived = await db.question.findMany({ where: { id: { in: ids.map(String) }, archivedAt: { not: null } }, select: { id: true } });
+  const toDelete = archived.map((q) => q.id);
+  await db.$transaction([
+    db.answer.deleteMany({ where: { questionId: { in: toDelete } } }),
+    db.question.deleteMany({ where: { id: { in: toDelete } } }),
+  ]);
+  return NextResponse.json({ deleted: toDelete.length });
+}
