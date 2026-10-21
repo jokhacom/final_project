@@ -5,7 +5,7 @@ import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel } from "@/lib/levels";
 import { attemptsLeft, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
-import { attemptQuestionIds, finishAttempt, isRunning } from "@/lib/attempts";
+import { attemptQuestionIds, finishAttempt, isRunning, openSecondsLeft, openStartsOf } from "@/lib/attempts";
 
 function sample<T>(arr: T[], n: number): T[] {
   const copy = [...arr];
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 }
 
 // Вопросы попытки (без правильных ответов), сохранённые ответы и сколько секунд осталось.
-async function attemptPayload(attempt: { id: string; startedAt: Date; durationSec: number; questionIds: unknown }) {
+async function attemptPayload(attempt: { id: string; level: string; startedAt: Date; durationSec: number; questionIds: unknown; openStarts: unknown }) {
   const questionIds = attemptQuestionIds(attempt);
   const [full, answers] = await Promise.all([
     db.question.findMany({ where: { id: { in: questionIds } }, select: { id: true, type: true, text: true, options: true, image: true } }),
@@ -97,5 +97,7 @@ async function attemptPayload(attempt: { id: string; startedAt: Date; durationSe
     secondsLeft,
     questions,
     answers: Object.fromEntries(answers.map((a) => [a.questionId, a.rawAnswer ?? ""])),
+    // Открытые вопросы, которые уже открывали: сколько секунд на них осталось (может быть ≤ 0).
+    openLeft: Object.fromEntries(Object.keys(openStartsOf(attempt)).map((id) => [id, openSecondsLeft(attempt, id)])),
   };
 }

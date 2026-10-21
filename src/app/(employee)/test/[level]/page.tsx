@@ -37,6 +37,10 @@ export default function TestPage() {
   const [deadline, setDeadline] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [confirmFinish, setConfirmFinish] = useState<number[] | null>(null); // номера неотвеченных вопросов
+  // Отдельный таймер открытых вопросов: когда истекает время каждого (по часам браузера).
+  const [openDeadlines, setOpenDeadlines] = useState<Record<string, number>>({});
+  const closed = useRef<Set<string>>(new Set()); // открытые вопросы, время которых вышло и ответ уже не меняется
+  const sawRunning = useRef<Set<string>>(new Set()); // таймер вопроса шёл у сотрудника на глазах
   const started = useRef(false);
   const finishing = useRef(false);
 
@@ -77,6 +81,9 @@ export default function TestPage() {
       const firstOpen = qs.findIndex((q) => !isAnswered(q, restored[q.id]));
       setIndex(firstOpen === -1 ? qs.length - 1 : firstOpen);
       setDeadline(Date.now() + data.secondsLeft * 1000);
+      setOpenDeadlines(
+        Object.fromEntries(Object.entries((data.openLeft ?? {}) as Record<string, number>).map(([id, s]) => [id, Date.now() + s * 1000]))
+      );
       setPhase("question");
     })();
   }, [level]);
@@ -84,7 +91,7 @@ export default function TestPage() {
   // Сохранить ответ на вопрос, если он изменился. Ошибку показываем, но сотрудника не держим.
   const saveDraft = useCallback(
     async (q: Question | undefined, keepalive = false) => {
-      if (!q || !attemptId) return true;
+      if (!q || !attemptId || closed.current.has(q.id)) return true;
       const d = drafts[q.id] ?? emptyDraft;
       const choice = CHOICE.includes(q.type);
       const raw = choice ? (d.selected === null ? "" : String(d.selected)) : d.text;
@@ -146,6 +153,35 @@ export default function TestPage() {
   const isChoice = q ? CHOICE.includes(q.type) : false;
   const draft = (q && drafts[q.id]) || emptyDraft;
   const setDraft = (patch: Partial<Draft>) => q && setDrafts((all) => ({ ...all, [q.id]: { ...(all[q.id] ?? emptyDraft), ...patch } }));
+
+  // Открытый вопрос: при первом открытии запускаем его таймер на сервере.
+  useEffect(() => {
+    if (!q || isChoice || !attemptId || phase !== "question" || openDeadlines[q.id] !== undefined) return;
+    fetch("/api/attempts/open-start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attemptId, questionId: q.id }),
+    })
+      .then((r) => r.json())
+      .then((d) => typeof d.secondsLeft === "number" && setOpenDeadlines((all) => ({ ...all, [q.id]: Date.now() + d.secondsLeft * 1000 })))
+      .catch(() => {});
+  }, [q, isChoice, attemptId, phase, openDeadlines]);
+
+  const qDeadline = q && !isChoice ? openDeadlines[q.id] : undefined;
+  const qLeft = qDeadline !== undefined ? Math.max(0, Math.ceil((qDeadline - now) / 1000)) : null;
+  const locked = qLeft === 0;
+  if (q && qLeft !== null && qLeft > 0) sawRunning.current.add(q.id);
+
+  // Время на открытый вопрос вышло: сохраняем то, что написано, закрываем поле и, если таймер
+  // шёл на глазах у сотрудника, переходим к следующему вопросу.
+  useEffect(() => {
+    if (!q || !locked || closed.current.has(q.id) || phase !== "question") return;
+    const live = sawRunning.current.has(q.id);
+    saveDraft(q).finally(() => {
+      closed.current.add(q.id);
+      if (live && index + 1 < questions.length) setTimeout(() => setIndex((i) => (i === index ? i + 1 : i)), 1500);
+    });
+  }, [q, locked, phase, saveDraft, index, questions.length]);
 
   // Вариант сохраняем сразу; текст — через 1,5 секунды после последнего ввода и при уходе со страницы.
   useEffect(() => {
@@ -212,9 +248,16 @@ export default function TestPage() {
         <span className="badge" style={{ color: info.color }}>
           {info.icon} {info.label}
         </span>
-        <span className={`timer ${left <= 10 ? "danger" : ""}`}>
-          ⏱ {mm}:{ss}
-        </span>
+        <div className="row" style={{ gap: 8 }}>
+          {qLeft !== null && (
+            <span className={`timer ${qLeft <= 10 ? "danger" : ""}`} title="Время на этот вопрос">
+              ✍️ {Math.floor(qLeft / 60)}:{String(qLeft % 60).padStart(2, "0")}
+            </span>
+          )}
+          <span className={`timer ${left <= 10 ? "danger" : ""}`} title="Время на весь тест">
+            ⏱ {mm}:{ss}
+          </span>
+        </div>
       </div>
 
       {/* Сегменты прогресса — тоже навигация: зелёный — есть ответ, розовый — текущий вопрос. */}
@@ -252,13 +295,21 @@ export default function TestPage() {
               ))}
             </div>
           ) : (
-            <ProtectedTextarea
-              value={draft.text}
-              onChange={(e) => setDraft({ text: e.target.value })}
-              placeholder="Напишите ответ своими словами..."
-              rows={6}
-              maxLength={3000}
-            />
+            <>
+              <ProtectedTextarea
+                value={draft.text}
+                onChange={(e) => !locked && setDraft({ text: e.target.value })}
+                placeholder="Напишите ответ своими словами..."
+                rows={6}
+                maxLength={3000}
+                disabled={locked}
+              />
+              {locked ? (
+                <div className="alert alert-error">⏰ Время на этот вопрос вышло — ответ сохранён и больше не меняется.</div>
+              ) : (
+                qLeft !== null && <div className="muted small">На этот вопрос — свой таймер ✍️: он идёт, даже если перейти к другому вопросу.</div>
+              )}
+            </>
           )}
 
           {error && <div className="alert alert-error">{error}</div>}

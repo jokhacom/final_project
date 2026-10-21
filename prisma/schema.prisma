@@ -144,6 +144,7 @@ model TestAttempt {
   candies    Int
   questionIds Json?    // порядок вопросов, выданных в этой попытке (для разбора и проверки)
   durationSec Int      @default(900) // время на тест, действовавшее в момент старта
+  openStarts  Json?    // когда сотрудник впервые открыл каждый открытый вопрос: { questionId: ISO-время }
   startedAt  DateTime @default(now())
   finishedAt DateTime?
 
