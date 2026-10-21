@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { SUPERADMIN_USERNAME } from "@/lib/auth";
+import { canRegisterEmployee } from "@/lib/userLimit";
 
 // Раздел 1 запроса: каждый сотрудник входит только по логину и паролю,
 // аккаунт сохраняется в базе и не исчезает после перезапуска сайта.
@@ -27,6 +28,13 @@ export async function POST(req: NextRequest) {
     const existing = await db.user.findUnique({ where: { username: username.trim() } });
     if (existing) {
       return NextResponse.json({ error: "Такой логин уже занят" }, { status: 409 });
+    }
+
+    if (!(await canRegisterEmployee())) {
+      return NextResponse.json(
+        { error: "Регистрация закрыта: достигнуто максимальное число пользователей. Обратитесь к администратору." },
+        { status: 403 }
+      );
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

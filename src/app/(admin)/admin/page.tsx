@@ -23,6 +23,8 @@ export default function AdminHome() {
   const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
   const [qCount, setQCount] = useState("10");
   const [attemptLimit, setAttemptLimit] = useState("0");
+  const [userLimit, setUserLimit] = useState("0");
+  const [userLimitSaved, setUserLimitSaved] = useState<string | null>(null);
   // Время на один открытый вопрос по уровням, минуты (строки — чтобы можно было стереть и ввести 1.5).
   const [openMin, setOpenMin] = useState<Record<LevelId, string>>(
     Object.fromEntries(LEVELS.map((l) => [l.id, String(OPEN_QUESTION_SECONDS[l.id] / 60)])) as Record<LevelId, string>
@@ -67,6 +69,8 @@ export default function AdminHome() {
         if (qc) setQCount(qc.value);
         const al = list.find((s: any) => s.key === "test_attempt_limit");
         if (al) setAttemptLimit(al.value);
+        const ul = list.find((s: any) => s.key === "max_employees");
+        if (ul) setUserLimit(ul.value);
         setOpenMin((prev) => {
           const next = { ...prev };
           for (const l of LEVELS) {
@@ -98,6 +102,19 @@ export default function AdminHome() {
     }
     setMinutesSaved("Сохранено — действует для новых попыток");
   }
+
+  async function saveUserLimit() {
+    setUserLimitSaved(null);
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "max_employees", value: userLimit.trim() || "0" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setUserLimitSaved(res.ok ? "Сохранено — действует для новых регистраций" : data.error ?? "Не удалось сохранить");
+  }
+
+  const employeeCount = users.filter((u) => u.role === "EMPLOYEE").length;
 
   async function toggleDailyQuiz() {
     const next = !dailyQuiz;
@@ -312,6 +329,23 @@ export default function AdminHome() {
             <button className="btn btn-primary btn-sm" onClick={saveMinutes}>
               Сохранить настройки теста
             </button>
+          </div>
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Максимум пользователей</div>
+              <div className="muted small">
+                Сколько сотрудников может зарегистрироваться на сайте (0 — без ограничений; администраторы не считаются). Когда лимит
+                достигнут, регистрация закрывается; уже созданные аккаунты продолжают работать. Сейчас сотрудников: {employeeCount}.
+              </div>
+              {userLimitSaved && <div className="small" style={{ marginTop: 4 }}>{userLimitSaved}</div>}
+            </div>
+            <div className="row">
+              <input className="input" style={{ width: 90 }} type="number" min={0} value={userLimit} onChange={(e) => setUserLimit(e.target.value)} />
+              <span className="muted small">сотрудников</span>
+              <button className="btn btn-primary btn-sm" onClick={saveUserLimit}>
+                Сохранить
+              </button>
+            </div>
           </div>
           <div className="row between">
             <div>

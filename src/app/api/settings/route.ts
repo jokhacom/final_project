@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireSuperadmin } from "@/lib/session";
 import { isValidOpenMinutes, isValidQuestionCount, MAX_QUESTION_COUNT, MAX_TEST_MINUTES, MIN_TEST_MINUTES } from "@/lib/testSettings";
+import { USER_LIMIT_KEY, isValidUserLimit } from "@/lib/userLimit";
 
 // Раздел 23: изменения дизайна/текстов/правил без кода.
 // Примеры ключей: "daily_quiz_enabled", "theme_accent_color", "welcome_text".
@@ -30,7 +31,10 @@ export async function POST(req: NextRequest) {
     const n = Number(value);
     if (!Number.isInteger(n) || n < 0) return NextResponse.json({ error: "Попыток — целое число, 0 — без ограничений" }, { status: 400 });
   }
-  const stored = String(key).startsWith("open_question_min_") ? String(value).replace(",", ".") : value;
+  if (key === USER_LIMIT_KEY && !isValidUserLimit(Number(value))) {
+    return NextResponse.json({ error: "Максимум пользователей — целое число, 0 — без ограничений" }, { status: 400 });
+  }
+  const stored =String(key).startsWith("open_question_min_") ? String(value).replace(",", ".") : value;
   const setting = await db.setting.upsert({
     where: { key },
     create: { key, value: stored },
