@@ -207,18 +207,16 @@ export default function TypingPage() {
                 const t = isDone ? typed[wi] : isActive ? input : "";
                 const wrongWord = isDone && !sameWord(t, w);
                 return (
-                  <span key={wi} className={`tw-word ${isActive ? "active" : ""} ${wrongWord ? "wrong" : ""}`}>
+                  <span key={wi} className={`tw-word ${isActive ? "active" : ""} ${isDone ? "done" : ""} ${wrongWord ? "wrong" : ""}`}>
                     {[...w].map((c, ci) => {
                       const cls = ci < t.length ? (sameChar(t[ci], c) ? "ok" : "bad") : "";
                       return (
                         <span key={ci} className={`tw-char ${cls}`}>
-                          {isActive && ci === t.length && <span className="tw-caret" />}
                           {c}
                         </span>
                       );
                     })}
                     {t.length > w.length && <span className="tw-char extra">{t.slice(w.length)}</span>}
-                    {isActive && t.length >= w.length && <span className="tw-caret" />}
                   </span>
                 );
               })}
