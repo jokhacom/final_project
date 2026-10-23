@@ -290,14 +290,16 @@ body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (
 /* Тест скорости печати */
 .tw-box { position: relative; height: calc(3 * 2.1em); overflow: hidden; font-size: 22px; line-height: 2.1em; cursor: text; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 .tw-words { display: flex; flex-wrap: wrap; column-gap: 0.55em; transition: transform 0.15s ease; }
-.tw-word { position: relative; white-space: nowrap; color: var(--muted); opacity: 0.75; }
+/* Ещё не набранные слова — приглушённые; набранные и текущее — в полную яркость. */
+.tw-word { position: relative; white-space: nowrap; color: var(--muted); opacity: 0.7; }
+.tw-word.done, .tw-word.active { opacity: 1; }
 .tw-word.wrong { text-decoration: underline; text-decoration-color: var(--danger); text-underline-offset: 6px; }
 .tw-char { position: relative; }
 .tw-char.ok { color: var(--text); opacity: 1; }
+:root[data-theme="dark"] .tw-char.ok { color: #ffffff; } /* в тёмной теме верные буквы — чисто белые */
 .tw-char.bad { color: var(--danger); opacity: 1; }
 .tw-char.extra { color: var(--danger); opacity: 0.7; }
 .tw-word.active .tw-char.ok, .tw-word.active .tw-char.bad { opacity: 1; }
-/* Без курсора: верно набранные буквы становятся светлыми, текущее слово чуть ярче остальных. */
-.tw-word.active { opacity: 1; }
+/* Без курсора: верно набранные буквы становятся светлыми, ошибочные — красными. */
 .tw-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 @media (max-width: 600px) { .tw-box { font-size: 18px; } }
