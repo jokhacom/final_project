@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { GAME_TIMER_DEFAULTS, LANGUAGE_ROUND, type GameTimerKind } from "@/lib/gameConstants";
 import { isPowerPoint, viewerUrl } from "@/lib/presentations";
 import { PdfViewer } from "@/components/PdfViewer";
@@ -70,6 +71,12 @@ export default function LearnPage() {
           <div className="level-meta">{counts.FIX_ERROR ? `${Math.min(counts.FIX_ERROR, 12)} заданий за раунд` : "Скоро — задания готовятся"}</div>
         </button>
       </div>
+
+      <Link href="/typing" className="card level-card mt" style={{ ["--level" as any]: "#7C4DFF", textDecoration: "none" }}>
+        <div style={{ fontSize: 34 }}>⌨️</div>
+        <div className="level-title">Скорость печати</div>
+        <div className="muted">Как monkeytype: русский, узбекский и узбекский на новом алфавите. Скорость, точность и таблица лучших.</div>
+      </Link>
 
       <h2 className="mt-lg">📊 Презентации</h2>
       {!presentations ? (
