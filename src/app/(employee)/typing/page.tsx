@@ -212,13 +212,11 @@ export default function TypingPage() {
                       const cls = ci < t.length ? (sameChar(t[ci], c) ? "ok" : "bad") : "";
                       return (
                         <span key={ci} className={`tw-char ${cls}`}>
-                          {isActive && ci === t.length && <span className="tw-caret" />}
                           {c}
                         </span>
                       );
                     })}
                     {t.length > w.length && <span className="tw-char extra">{t.slice(w.length)}</span>}
-                    {isActive && t.length >= w.length && <span className="tw-caret" />}
                   </span>
                 );
               })}

@@ -297,8 +297,7 @@ body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (
 .tw-char.bad { color: var(--danger); opacity: 1; }
 .tw-char.extra { color: var(--danger); opacity: 0.7; }
 .tw-word.active .tw-char.ok, .tw-word.active .tw-char.bad { opacity: 1; }
-.tw-caret { position: absolute; left: -1px; top: 0.35em; width: 2px; height: 1.3em; background: var(--accent-2); animation: tw-blink 1s step-end infinite; }
-.tw-word > .tw-caret { left: auto; right: -2px; }
-@keyframes tw-blink { 50% { opacity: 0; } }
+/* Без курсора: верно набранные буквы становятся светлыми, текущее слово чуть ярче остальных. */
+.tw-word.active { opacity: 1; }
 .tw-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 @media (max-width: 600px) { .tw-box { font-size: 18px; } }
