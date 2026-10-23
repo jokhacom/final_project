@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { isChoiceType } from "@/lib/ai/provider";
 import { isLevel } from "@/lib/levels";
-import { attemptsLeft, getOpenSeconds, getQuestionCount, getTestMinutes } from "@/lib/testSettings";
+import { attemptsLeft, getLevelSettings, getOpenSeconds } from "@/lib/testSettings";
 import { activeQuestionsFilter } from "@/lib/readiness";
 import { attemptQuestionIds, finishAttempt, isRunning, openSecondsLeft, openStartsOf } from "@/lib/attempts";
 
@@ -50,14 +50,15 @@ export async function POST(req: NextRequest) {
   // Лимит попыток: считаются все начатые попытки (и брошенные), чтобы нельзя было
   // бесконечно начинать тест заново и подсматривать вопросы.
   const left = await attemptsLeft(user);
-  if (left && left[level] <= 0) {
+  if (left && left[level] !== null && left[level]! <= 0) {
     return NextResponse.json({ error: "Попытки по этому уровню закончились. Обратитесь к администратору." }, { status: 403 });
   }
 
   const activeOnly = activeQuestionsFilter;
   const select = { id: true, type: true, level: true };
 
-  const n = await getQuestionCount();
+  const settings = (await getLevelSettings())[level];
+  const n = settings.count;
   // Каждый уровень, включая итоговый экзамен, — только свои вопросы.
   // Экзамен — отдельное задание: администратор сам добавляет для него вопросы.
   const pool = await db.question.findMany({ where: { level, ...activeOnly }, select });
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
   const ordered = [...picked.filter((q) => isChoiceType(q.type)), ...picked.filter((q) => !isChoiceType(q.type))];
   const questionIds = ordered.map((q) => q.id);
 
-  const durationSec = (await getTestMinutes()) * 60;
+  const durationSec = settings.minutes * 60;
   const attempt = await db.testAttempt.create({ data: { userId: user.id, level, candies: 0, questionIds, durationSec } });
 
   return NextResponse.json(await attemptPayload(attempt));

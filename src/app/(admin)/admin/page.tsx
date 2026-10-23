@@ -11,6 +11,8 @@ type User = { id: string; name: string; username: string; role: string; leaderbo
 const ROLE_LABEL: Record<string, string> = { EMPLOYEE: "Сотрудник", ADMIN: "Администратор", SUPERADMIN: "Суперадмин" };
 
 // Обзор админ-панели: выгрузка результатов в Excel, список сотрудников и настройки.
+type LevelCfg = { count: string; minutes: string; attempts: string; open: string };
+
 export default function AdminHome() {
   const { data: session } = useSession();
   const isSuper = (session?.user as any)?.role === "SUPERADMIN";
@@ -19,14 +21,16 @@ export default function AdminHome() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [dailyQuiz, setDailyQuiz] = useState<boolean | null>(null);
-  const [minutes, setMinutes] = useState("15");
   const [minutesSaved, setMinutesSaved] = useState<string | null>(null);
-  const [qCount, setQCount] = useState("10");
-  const [attemptLimit, setAttemptLimit] = useState("0");
-  // Время на один открытый вопрос по уровням, минуты (строки — чтобы можно было стереть и ввести 1.5).
-  const [openMin, setOpenMin] = useState<Record<LevelId, string>>(
-    Object.fromEntries(LEVELS.map((l) => [l.id, String(OPEN_QUESTION_SECONDS[l.id] / 60)])) as Record<LevelId, string>
+  // Настройки теста для каждого уровня: вопросов, минут на тест, попыток (0 — без ограничений),
+  // минут на один открытый вопрос (можно 1.5). Строки — чтобы поле можно было стереть и ввести заново.
+  const [levelCfg, setLevelCfg] = useState<Record<LevelId, LevelCfg>>(
+    Object.fromEntries(
+      LEVELS.map((l) => [l.id, { count: "10", minutes: "15", attempts: "0", open: String(OPEN_QUESTION_SECONDS[l.id] / 60) }])
+    ) as Record<LevelId, LevelCfg>
   );
+  const setCfg = (level: LevelId, field: keyof LevelCfg, value: string) =>
+    setLevelCfg((all) => ({ ...all, [level]: { ...all[level], [field]: value } }));
   // Максимум пользователей сайта (0 — без ограничений) и сколько их сейчас (без суперадминистратора).
   const [maxUsers, setMaxUsers] = useState("0");
   const [userCount, setUserCount] = useState(0);
@@ -72,12 +76,21 @@ export default function AdminHome() {
       .then((d) => {
         const list = d.settings ?? [];
         setDailyQuiz(list.some((s: any) => s.key === "daily_quiz_enabled" && s.value === "true"));
-        const dur = list.find((s: any) => s.key === "test_duration_min");
-        if (dur) setMinutes(dur.value);
-        const qc = list.find((s: any) => s.key === "test_question_count");
-        if (qc) setQCount(qc.value);
-        const al = list.find((s: any) => s.key === "test_attempt_limit");
-        if (al) setAttemptLimit(al.value);
+        // Значение уровня, если задано, иначе прежнее общее.
+        const val = (key: string, level: LevelId) =>
+          (list.find((s: any) => s.key === `${key}_${level}`) ?? list.find((s: any) => s.key === key))?.value as string | undefined;
+        setLevelCfg((prev) => {
+          const next = { ...prev };
+          for (const l of LEVELS) {
+            next[l.id] = {
+              count: val("test_question_count", l.id) ?? prev[l.id].count,
+              minutes: val("test_duration_min", l.id) ?? prev[l.id].minutes,
+              attempts: val("test_attempt_limit", l.id) ?? prev[l.id].attempts,
+              open: list.find((s: any) => s.key === `open_question_min_${l.id}`)?.value ?? prev[l.id].open,
+            };
+          }
+          return next;
+        });
         const mu = list.find((s: any) => s.key === "max_users");
         if (mu) setMaxUsers(mu.value);
         setGameSec((prev) => {
@@ -85,14 +98,6 @@ export default function AdminHome() {
           for (const k of Object.keys(prev)) {
             const v = list.find((s: any) => s.key === `game_seconds_${k}`);
             if (v) next[k] = v.value;
-          }
-          return next;
-        });
-        setOpenMin((prev) => {
-          const next = { ...prev };
-          for (const l of LEVELS) {
-            const v = list.find((s: any) => s.key === `open_question_min_${l.id}`);
-            if (v) next[l.id] = v.value;
           }
           return next;
         });
@@ -104,10 +109,12 @@ export default function AdminHome() {
   async function saveMinutes() {
     setMinutesSaved(null);
     for (const [key, value] of [
-      ["test_duration_min", minutes.trim()],
-      ["test_question_count", qCount.trim()],
-      ["test_attempt_limit", attemptLimit.trim() || "0"],
-      ...LEVELS.map((l) => [`open_question_min_${l.id}`, openMin[l.id].trim()]),
+      ...LEVELS.flatMap((l) => [
+        [`test_question_count_${l.id}`, levelCfg[l.id].count.trim()],
+        [`test_duration_min_${l.id}`, levelCfg[l.id].minutes.trim()],
+        [`test_attempt_limit_${l.id}`, levelCfg[l.id].attempts.trim() || "0"],
+        [`open_question_min_${l.id}`, levelCfg[l.id].open.trim()],
+      ]),
       ["max_users", maxUsers.trim() || "0"],
       ...Object.entries(gameSec).map(([k, v]) => [`game_seconds_${k}`, v.trim()]),
     ]) {
@@ -288,47 +295,54 @@ export default function AdminHome() {
       {isSuper && dailyQuiz !== null && (
         <div className="card">
           <h2>⚙️ Настройки</h2>
-          <div className="row between" style={{ marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 800 }}>Тест: вопросов и время</div>
-              <div className="muted small">
-                Сколько вопросов в одном тесте, сколько минут на него и сколько раз сотрудник может пройти каждый уровень (0 — без ограничений;
-                администраторов лимит не касается). Вопросы делятся пополам: с вариантами и открытые. Уже
-                начатые попытки не меняются. На каждом уровне в банке должно быть не меньше вопросов, чем в тесте.
-              </div>
-              {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 800 }}>Тесты по уровням</div>
+            <div className="muted small">
+              Для каждого уровня отдельно: сколько вопросов в тесте, сколько минут на весь тест, сколько раз сотрудник может его пройти (0 — без
+              ограничений; администраторов лимит не касается) и сколько минут на один открытый вопрос (можно дробно: 1.5). Вопросы делятся пополам:
+              с вариантами и открытые. Уже начатые попытки не меняются.
             </div>
-            <div className="row">
-              <input className="input" style={{ width: 90 }} type="number" min={1} value={qCount} onChange={(e) => setQCount(e.target.value)} />
-              <span className="muted small">вопросов,</span>
-              <input className="input" style={{ width: 90 }} type="number" min={1} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-              <span className="muted small">мин,</span>
-              <input className="input" style={{ width: 80 }} type="number" min={0} value={attemptLimit} onChange={(e) => setAttemptLimit(e.target.value)} />
-              <span className="muted small">попыток на уровень</span>
-            </div>
-          </div>
-          <div className="row between" style={{ marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 800 }}>Время на один открытый вопрос ✍️</div>
-              <div className="muted small">
-                Отдельный таймер на каждый вопрос с ответом своими словами, в минутах (можно дробно: 1.5). Когда время вышло, ответ сохраняется и
-                больше не меняется. Общее время теста — выше.
-              </div>
-            </div>
-            <div className="row">
-              {LEVELS.map((l) => (
-                <label key={l.id} className="row small" style={{ gap: 4 }}>
-                  <span className="muted">{l.id === "EXAM" ? "Экзамен" : l.label}</span>
-                  <input
-                    className="input"
-                    style={{ width: 70 }}
-                    inputMode="decimal"
-                    value={openMin[l.id]}
-                    onChange={(e) => setOpenMin({ ...openMin, [l.id]: e.target.value.replace(/[^\d.,]/g, "") })}
-                  />
-                </label>
-              ))}
-              <span className="muted small">мин</span>
+            {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
+            <div className="table-wrap mt">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Уровень</th>
+                    <th>Вопросов</th>
+                    <th>Минут на тест</th>
+                    <th>Попыток</th>
+                    <th>Минут на открытый вопрос ✍️</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {LEVELS.map((l) => (
+                    <tr key={l.id}>
+                      <td style={{ fontWeight: 800 }}>
+                        {l.icon} {l.id === "EXAM" ? "Итоговый экзамен" : l.label}
+                      </td>
+                      {(
+                        [
+                          ["count", "numeric", /\D/g],
+                          ["minutes", "numeric", /\D/g],
+                          ["attempts", "numeric", /\D/g],
+                          ["open", "decimal", /[^\d.,]/g],
+                        ] as const
+                      ).map(([field, mode, strip]) => (
+                        <td key={field}>
+                          <input
+                            className="input"
+                            style={{ width: 80 }}
+                            inputMode={mode}
+                            value={levelCfg[l.id][field]}
+                            onChange={(e) => setCfg(l.id, field, e.target.value.replace(strip, ""))}
+                            aria-label={`${l.label}: ${field}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
           <div className="row between" style={{ marginBottom: 16 }}>
