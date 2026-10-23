@@ -288,7 +288,7 @@ body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (
 .barlist-fill { height: 100%; border-radius: 99px; }
 
 /* Тест скорости печати */
-.tw-box { position: relative; height: calc(3 * 2.1em); overflow: hidden; font-size: 22px; line-height: 2.1em; cursor: text; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
+.tw-box { position: relative; height: calc(3 * 2.1em); overflow: hidden; font-size: 22px; line-height: 2.1em; cursor: text; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-weight: 700; }
 .tw-words { display: flex; flex-wrap: wrap; column-gap: 0.55em; transition: transform 0.15s ease; }
 /* Ещё не набранные слова — приглушённые; набранные и текущее — в полную яркость. */
 .tw-word { position: relative; white-space: nowrap; color: var(--muted); opacity: 0.7; }
