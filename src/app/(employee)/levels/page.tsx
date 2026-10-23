@@ -24,8 +24,9 @@ export default function LevelsPage() {
   const [inTest, setInTest] = useState<Record<string, number>>({});
   const [left, setLeft] = useState<Record<string, number | null>>({});
   const [inProgress, setInProgress] = useState<Record<string, boolean>>({});
-  const [minutes, setMinutes] = useState(15);
-  const [count, setCount] = useState(10);
+  // Вопросов и минут на тест — у каждого уровня свои (настройки на «Обзоре»).
+  const [minutes, setMinutes] = useState<Record<string, number>>({});
+  const [count, setCount] = useState<Record<string, number>>({});
   const [openSeconds, setOpenSeconds] = useState(OPEN_QUESTION_SECONDS);
 
   useEffect(() => {
@@ -36,8 +37,8 @@ export default function LevelsPage() {
         setInTest(Object.fromEntries((d.levels ?? []).map((l: { id: string; inTest: number }) => [l.id, l.inTest])));
         setLeft(Object.fromEntries((d.levels ?? []).map((l: { id: string; attemptsLeft: number | null }) => [l.id, l.attemptsLeft])));
         setInProgress(Object.fromEntries((d.levels ?? []).map((l: { id: string; inProgress: boolean }) => [l.id, l.inProgress])));
-        if (d.minutes) setMinutes(d.minutes);
-        if (d.count) setCount(d.count);
+        setMinutes(Object.fromEntries((d.levels ?? []).map((l: { id: string; minutes: number }) => [l.id, l.minutes])));
+        setCount(Object.fromEntries((d.levels ?? []).map((l: { id: string; count: number }) => [l.id, l.count])));
         if (d.openSeconds) setOpenSeconds(d.openSeconds);
       })
       .catch(() => setReady(null));
@@ -58,7 +59,7 @@ export default function LevelsPage() {
               <div className="level-title">{l.label}</div>
               <div className="muted">{l.description}</div>
               <div className="level-meta">
-                {inTest[l.id] || count} {plural(inTest[l.id] || count)} · {minutes} мин · до 100 🍬
+                {inTest[l.id] || count[l.id] || 10} {plural(inTest[l.id] || count[l.id] || 10)} · {minutes[l.id] ?? 15} мин · до 100 🍬
               </div>
               {left[l.id] != null && left[l.id]! > 0 && <div className="level-meta">Осталось попыток: {left[l.id]}</div>}
             </>
@@ -108,7 +109,7 @@ export default function LevelsPage() {
         <h3>Как считаются 🍬</h3>
         <ul className="muted small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
           <li>
-            Старт — 100 🍬. За неверный ответ снимается доля от 50 🍬 (в тесте из {count} вопросов — −{formatPenalty(count)}), орфографическая
+            Старт — 100 🍬. За неверный ответ снимается доля от 50 🍬 (в тесте из 10 вопросов — −{formatPenalty(10)}), орфографическая
             ошибка — −1, грамматическая — −1.
           </li>
           <li>Вставлять текст в открытые ответы нельзя — пишите своими словами.</li>
