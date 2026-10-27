@@ -66,6 +66,7 @@ export default function AdminLearningPage() {
   const [progress, setProgress] = useState(0);
   const [blob, setBlob] = useState(false); // подключено хранилище файлов — можно PowerPoint и большие файлы
   const [editing, setEditing] = useState<string | "new" | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const loadPresentations = () => fetch("/api/learning/presentations").then((r) => r.json()).then((d) => {
@@ -148,6 +149,26 @@ export default function AdminLearningPage() {
   }
 
   const shown = (items ?? []).filter((i) => i.kind === kind && (kind !== "LANGUAGE" || i.language === lang));
+  // Отмеченные галочками элементы текущей игры — для «Удалить выбранные».
+  const picked = shown.filter((g) => selected.has(g.id));
+  const allPicked = shown.length > 0 && picked.length === shown.length;
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const removeSelected = () => {
+    if (!picked.length || !confirm(`Удалить выбранные элементы игры (${picked.length})? Отменить нельзя.`)) return;
+    act(
+      () => send("/api/learning/games", "DELETE", { ids: picked.map((g) => g.id) }).then(() => {
+        setSelected(new Set());
+        return loadItems();
+      }),
+      `Удалено: ${picked.length}`
+    );
+  };
 
   return (
     <div className="stack">
@@ -275,7 +296,19 @@ export default function AdminLearningPage() {
         ) : shown.length === 0 ? (
           <div className="muted small">Пока пусто. Нажмите «🎮 Создать игры» у документа в «Материалах» — ИИ создаст игры по темам, — или добавьте вручную.</div>
         ) : (
-          shown.map((g) =>
+          <>
+          <div className="row" style={{ gap: 10 }}>
+            <label className="row small" style={{ gap: 6, cursor: "pointer" }}>
+              <input type="checkbox" checked={allPicked} onChange={() => setSelected(allPicked ? new Set() : new Set(shown.map((g) => g.id)))} />
+              Выбрать все ({shown.length})
+            </label>
+            {picked.length > 0 && (
+              <button className="btn btn-danger btn-sm" onClick={removeSelected}>
+                🗑 Удалить выбранные ({picked.length})
+              </button>
+            )}
+          </div>
+          {shown.map((g) =>
             editing === g.id ? (
               <GameItemForm
                 key={g.id}
@@ -286,7 +319,8 @@ export default function AdminLearningPage() {
             ) : (
               <div key={g.id} style={{ padding: "10px 0", borderTop: "1px solid var(--border)" }}>
                 <div className="row between" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}>
-                  <div>
+                  <input type="checkbox" style={{ marginTop: 4 }} checked={selected.has(g.id)} onChange={() => toggle(g.id)} aria-label="Выбрать" />
+                  <div style={{ flex: 1 }}>
                     {g.kind === "TRUE_FALSE" && <span className="badge" style={{ marginRight: 6 }}>{g.isCorrect ? "✅ Можно" : "❌ Нельзя"}</span>}
                     {g.kind === "LANGUAGE" && g.category && <span className="badge" style={{ marginRight: 6 }}>{g.category}</span>}
                     {g.image && <img src={g.image} alt="" style={{ display: "block", maxHeight: 120, maxWidth: "100%", borderRadius: 8, marginBottom: 4 }} />}
@@ -320,7 +354,8 @@ export default function AdminLearningPage() {
                 </div>
               </div>
             )
-          )
+          )}
+          </>
         )}
       </div>
     </div>
