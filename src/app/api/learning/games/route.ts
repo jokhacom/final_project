@@ -54,3 +54,14 @@ export async function POST(req: NextRequest) {
   const item = await db.gameItem.create({ data: checked.data });
   return NextResponse.json({ item });
 }
+
+// Удалить сразу несколько элементов игр: { ids: [...] }.
+export async function DELETE(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
+
+  const { ids } = await req.json();
+  if (!Array.isArray(ids) || !ids.length) return NextResponse.json({ error: "Нужны ids" }, { status: 400 });
+  const r = await db.gameItem.deleteMany({ where: { id: { in: ids.map(String) } } });
+  return NextResponse.json({ deleted: r.count });
+}
