@@ -10,7 +10,7 @@ export async function GET() {
 
   const users = await db.user.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, username: true, role: true, premium: true, createdAt: true, leaderboard: true },
+    select: { id: true, name: true, username: true, role: true, premium: true, premiumFrom: true, premiumUntil: true, createdAt: true, leaderboard: true },
   });
   // limit — максимум пользователей (0 — без ограничений); считаются все, кроме суперадминистратора.
   return NextResponse.json({ users, limit: await getUserLimit(), counted: users.filter((u) => u.role !== "SUPERADMIN").length });

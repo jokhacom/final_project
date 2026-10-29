@@ -1,11 +1,13 @@
 import { db } from "./db";
+import { premiumState, type PremiumState } from "./premium";
 import { isAdmin, type SessionUser } from "./session";
 
-// «Помощник ответов»: доступ — у администраторов и у сотрудников с отметкой «Премиум».
-export async function canUseAssistant(user: SessionUser) {
-  if (isAdmin(user)) return true;
-  const row = await db.user.findUnique({ where: { id: user.id }, select: { premium: true } });
-  return !!row?.premium;
+// «Помощник ответов»: доступ — у администраторов и у сотрудников с действующим премиумом.
+export async function assistantAccess(user: SessionUser) {
+  if (isAdmin(user)) return { allowed: true, state: "active" as PremiumState, from: null, until: null };
+  const row = await db.user.findUnique({ where: { id: user.id }, select: { premium: true, premiumFrom: true, premiumUntil: true } });
+  const state = row ? premiumState(row) : "off";
+  return { allowed: state === "active", state, from: row?.premiumFrom ?? null, until: row?.premiumUntil ?? null };
 }
 
 // Сколько текста файлов отправляем ИИ за один ответ (~100 тыс. токенов). Больше — дорого и медленно.

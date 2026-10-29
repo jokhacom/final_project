@@ -5,8 +5,9 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LEVELS, OPEN_QUESTION_SECONDS, levelInfo, type LevelId } from "@/lib/levels";
 import { useAdminStatus } from "@/components/admin/useAdminStatus";
+import { addMonths, formatDay, premiumState, tashkentToday } from "@/lib/premium";
 
-type User = { id: string; name: string; username: string; role: string; premium: boolean; leaderboard: { testsDone: number; bestCandy: number } | null };
+type User = { id: string; name: string; username: string; role: string; premium: boolean; premiumFrom: string | null; premiumUntil: string | null; leaderboard: { testsDone: number; bestCandy: number } | null };
 
 const ROLE_LABEL: Record<string, string> = { EMPLOYEE: "Сотрудник", ADMIN: "Администратор", SUPERADMIN: "Суперадмин" };
 
@@ -38,6 +39,8 @@ export default function AdminHome() {
   const [gameSec, setGameSec] = useState<Record<string, string>>({ TRUE_FALSE: "10", FIX_ERROR: "90", LANGUAGE: "10" });
   const status = useAdminStatus();
   const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Окно «Премиум для …: с — по»: открывается при включении галочки или по ✏️ у срока.
+  const [premiumEdit, setPremiumEdit] = useState<{ user: User; from: string; until: string } | null>(null);
   const loadUsers = () =>
     fetch("/api/admin/users")
       .then((r) => r.json())
@@ -56,6 +59,7 @@ export default function AdminHome() {
     const data = await res.json().catch(() => ({}));
     setUserMsg(res.ok ? { ok: true, text: okText ?? "Готово" } : { ok: false, text: data.error ?? "Ошибка" });
     loadUsers();
+    return res.ok;
   }
 
   function removeUser(u: User) {
@@ -227,6 +231,65 @@ export default function AdminHome() {
           <p className="muted small">Администратор видит админ-панель: вопросы, аналитику, выгрузку и обратную связь. Материалы и настройки — только у вас.</p>
         )}
         {userMsg && <div className={`alert ${userMsg.ok ? "alert-success" : "alert-error"}`} style={{ marginBottom: 12 }}>{userMsg.text}</div>}
+        {premiumEdit && (
+          <div className="card stack" style={{ marginBottom: 12, border: "1px solid var(--border)" }}>
+            <strong>⭐ Премиум для {premiumEdit.user.name}</strong>
+            <div className="row" style={{ gap: 10 }}>
+              <label className="small">
+                с{" "}
+                <input
+                  type="date"
+                  className="input"
+                  style={{ width: "auto" }}
+                  value={premiumEdit.from}
+                  onChange={(e) => setPremiumEdit({ ...premiumEdit, from: e.target.value })}
+                />
+              </label>
+              <label className="small">
+                по{" "}
+                <input
+                  type="date"
+                  className="input"
+                  style={{ width: "auto" }}
+                  value={premiumEdit.until}
+                  min={premiumEdit.from || undefined}
+                  onChange={(e) => setPremiumEdit({ ...premiumEdit, until: e.target.value })}
+                />
+              </label>
+              {[
+                [1, "+1 месяц"],
+                [3, "+3 месяца"],
+                [12, "+1 год"],
+              ].map(([m, label]) => (
+                <button
+                  key={m}
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setPremiumEdit({ ...premiumEdit, until: addMonths(premiumEdit.from || tashkentToday(), m as number) })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="muted small">Обе даты включительно. Пустое поле — без ограничения (например, без «по» — бессрочно).</div>
+            <div className="row" style={{ gap: 8 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  const { user, from, until } = premiumEdit;
+                  const period = from || until ? `${from ? ` с ${formatDay(from)}` : ""}${until ? ` по ${formatDay(until)}` : ""}` : " бессрочно";
+                  userAction(user, "PATCH", { premium: true, premiumFrom: from || null, premiumUntil: until || null }, `${user.name}: премиум${period}`).then(
+                    (ok) => ok && setPremiumEdit(null)
+                  );
+                }}
+              >
+                Сохранить
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setPremiumEdit(null)}>
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -264,15 +327,29 @@ export default function AdminHome() {
                     {u.role !== "EMPLOYEE" ? (
                       <span className="muted small" title="Администраторам помощник доступен всегда">всегда</span>
                     ) : (
-                      <input
-                        type="checkbox"
-                        checked={u.premium}
-                        disabled={!isSuper}
-                        aria-label={`Премиум для ${u.name}`}
-                        onChange={(e) =>
-                          userAction(u, "PATCH", { premium: e.target.checked }, e.target.checked ? `${u.name}: премиум включён` : `${u.name}: премиум выключен`)
-                        }
-                      />
+                      <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                        <input
+                          type="checkbox"
+                          checked={u.premium}
+                          disabled={!isSuper}
+                          aria-label={`Премиум для ${u.name}`}
+                          onChange={(e) =>
+                            e.target.checked
+                              ? setPremiumEdit({ user: u, from: tashkentToday(), until: "" })
+                              : userAction(u, "PATCH", { premium: false }, `${u.name}: премиум выключен`)
+                          }
+                        />
+                        {u.premium && <PremiumPeriod u={u} />}
+                        {u.premium && isSuper && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            title="Изменить срок"
+                            onClick={() => setPremiumEdit({ user: u, from: u.premiumFrom ?? "", until: u.premiumUntil ?? "" })}
+                          >
+                            ✏️
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td>{u.leaderboard?.testsDone ?? 0}</td>
@@ -426,5 +503,20 @@ export default function AdminHome() {
         </div>
       )}
     </div>
+  );
+}
+
+// Срок премиума в таблице сотрудников: обе даты сразу («с 29.10.2026 по 29.11.2026») и под ними состояние.
+function PremiumPeriod({ u }: { u: User }) {
+  const state = premiumState(u);
+  const from = u.premiumFrom ? `с ${formatDay(u.premiumFrom)}` : "";
+  const until = u.premiumUntil ? `по ${formatDay(u.premiumUntil)}` : from ? ", без срока" : "бессрочно";
+  const status = { active: "действует", soon: "ещё не начался", expired: "истёк", off: "" }[state];
+  return (
+    <span className="small" style={{ lineHeight: 1.3 }}>
+      <span style={{ whiteSpace: "nowrap" }}>{u.premiumUntil ? [from, until].filter(Boolean).join(" ") : from + until}</span>
+      <br />
+      <span style={{ color: state === "expired" ? "var(--danger)" : state === "active" ? "var(--success)" : "var(--muted)" }}>{status}</span>
+    </span>
   );
 }
