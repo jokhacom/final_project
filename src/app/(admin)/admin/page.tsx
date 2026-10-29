@@ -506,20 +506,17 @@ export default function AdminHome() {
   );
 }
 
-// Срок премиума в таблице сотрудников: «до 30.11.2026», «с 01.12.2026», «истёк 30.10.2026» или «бессрочно».
+// Срок премиума в таблице сотрудников: обе даты сразу («с 29.10.2026 по 29.11.2026») и под ними состояние.
 function PremiumPeriod({ u }: { u: User }) {
   const state = premiumState(u);
-  const text =
-    state === "soon"
-      ? `с ${formatDay(u.premiumFrom!)}`
-      : state === "expired"
-        ? `истёк ${formatDay(u.premiumUntil!)}`
-        : u.premiumUntil
-          ? `до ${formatDay(u.premiumUntil)}`
-          : "бессрочно";
+  const from = u.premiumFrom ? `с ${formatDay(u.premiumFrom)}` : "";
+  const until = u.premiumUntil ? `по ${formatDay(u.premiumUntil)}` : from ? ", без срока" : "бессрочно";
+  const status = { active: "действует", soon: "ещё не начался", expired: "истёк", off: "" }[state];
   return (
-    <span className="small" style={{ whiteSpace: "nowrap", color: state === "expired" ? "var(--danger)" : state === "soon" ? "var(--muted)" : undefined }}>
-      {text}
+    <span className="small" style={{ lineHeight: 1.3 }}>
+      <span style={{ whiteSpace: "nowrap" }}>{u.premiumUntil ? [from, until].filter(Boolean).join(" ") : from + until}</span>
+      <br />
+      <span style={{ color: state === "expired" ? "var(--danger)" : state === "active" ? "var(--success)" : "var(--muted)" }}>{status}</span>
     </span>
   );
 }
