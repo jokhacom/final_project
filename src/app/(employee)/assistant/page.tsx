@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatDay, type PremiumState } from "@/lib/premium";
 
 type Reply = { found: boolean; ru: string; uz: string; uzNew: string; note?: string };
 
@@ -12,7 +13,8 @@ const VERSIONS: { key: "ru" | "uz" | "uzNew"; label: string }[] = [
 
 // «Помощник ответов» (премиум): сотрудник вставляет сообщение клиента — ИИ даёт готовый ответ по шаблонам компании.
 export default function AssistantPage() {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [access, setAccess] = useState<{ allowed: boolean; state: PremiumState; from: string | null; until: string | null } | null>(null);
+  const allowed = access?.allowed ?? null;
   const [message, setMessage] = useState("");
   const [reply, setReply] = useState<Reply | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,10 @@ export default function AssistantPage() {
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/assistant").then((r) => r.json()).then((d) => setAllowed(!!d.allowed)).catch(() => setAllowed(false));
+    fetch("/api/assistant")
+      .then((r) => r.json())
+      .then((d) => setAccess({ allowed: !!d.allowed, state: d.state ?? "off", from: d.from ?? null, until: d.until ?? null }))
+      .catch(() => setAccess({ allowed: false, state: "off", from: null, until: null }));
   }, []);
 
   async function ask() {
@@ -47,7 +52,13 @@ export default function AssistantPage() {
         <div className="card center stack">
           <div style={{ fontSize: 48 }}>⭐</div>
           <h1 style={{ margin: 0 }}>Помощник ответов</h1>
-          <p className="muted">Это премиум-функция: ИИ составляет готовый ответ клиенту по шаблонам компании. Чтобы получить доступ, обратитесь к администратору.</p>
+          {access?.state === "soon" && access.from ? (
+            <p className="muted">Ваш премиум начнётся {formatDay(access.from)}. До этого дня помощник недоступен.</p>
+          ) : access?.state === "expired" && access.until ? (
+            <p className="muted">Срок премиума закончился {formatDay(access.until)}. Чтобы продлить, обратитесь к администратору.</p>
+          ) : (
+            <p className="muted">Это премиум-функция: ИИ составляет готовый ответ клиенту по шаблонам компании. Чтобы получить доступ, обратитесь к администратору.</p>
+          )}
         </div>
       </main>
     );
@@ -57,6 +68,7 @@ export default function AssistantPage() {
       <div>
         <h1 style={{ marginBottom: 4 }}>🤖 Помощник ответов</h1>
         <p className="muted" style={{ margin: 0 }}>Вставьте сообщение клиента — ИИ составит ответ по шаблонам и правилам компании. Перед отправкой проверьте ответ.</p>
+        {access?.until && <p className="muted small" style={{ margin: "4px 0 0" }}>⭐ Премиум до {formatDay(access.until)}</p>}
       </div>
 
       <div className="card stack">

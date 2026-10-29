@@ -49,6 +49,8 @@ model User {
   createdAt     DateTime @default(now())
   attemptsResetAt DateTime? // попытки, начатые до этого момента, не считаются в лимит (кнопка «Сбросить попытки»)
   premium       Boolean  @default(false) // доступ к «Помощнику ответов»; включает только суперадминистратор
+  premiumFrom   String?  // срок премиума: с какого дня и по какой включительно, "YYYY-MM-DD" по Ташкенту; null — без ограничения
+  premiumUntil  String?
 
   attempts        TestAttempt[]
   achievements    UserAchievement[]

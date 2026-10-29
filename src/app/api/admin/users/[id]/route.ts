@@ -24,8 +24,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (target.error) return target.error;
 
   const body = await req.json();
-  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date; premium?: boolean } = {};
+  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date; premium?: boolean; premiumFrom?: string | null; premiumUntil?: string | null } = {};
   if (typeof body.premium === "boolean") data.premium = body.premium; // доступ к «Помощнику ответов»
+  // Срок премиума: "YYYY-MM-DD" или пусто — без ограничения.
+  for (const key of ["premiumFrom", "premiumUntil"] as const) {
+    if (body[key] === undefined) continue;
+    const v = body[key] ? String(body[key]) : null;
+    if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return NextResponse.json({ error: "Неверная дата" }, { status: 400 });
+    data[key] = v;
+  }
+  if (data.premiumFrom && data.premiumUntil && data.premiumFrom > data.premiumUntil) {
+    return NextResponse.json({ error: "Дата «с» позже даты «по»" }, { status: 400 });
+  }
   if (body.resetAttempts === true) data.attemptsResetAt = new Date(); // история сохраняется, лимит считается заново
   if (body.role !== undefined) {
     if (body.role !== "EMPLOYEE" && body.role !== "ADMIN") {

@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aiProvider } from "@/lib/ai";
 import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
-import { canUseAssistant, loadKnowledge, MAX_CLIENT_MESSAGE } from "@/lib/assistant";
+import { assistantAccess, loadKnowledge, MAX_CLIENT_MESSAGE } from "@/lib/assistant";
 import { toNewAlphabet } from "@/lib/typingWords";
 import { requireUser } from "@/lib/session";
 
 export const maxDuration = 60;
 
-// Есть ли доступ к «Помощнику ответов» — для меню и страницы.
+// Есть ли доступ к «Помощнику ответов» — для меню и страницы (state и срок — чтобы объяснить, почему нет).
 export async function GET() {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
-  return NextResponse.json({ allowed: await canUseAssistant(user) });
+  return NextResponse.json(await assistantAccess(user));
 }
 
 // Готовый ответ клиенту по загруженным шаблонам: русский, узбекский и узбекский на новом алфавите.
@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await requireUser();
   if (user instanceof NextResponse) return user;
-  if (!(await canUseAssistant(user))) return NextResponse.json({ error: "Помощник ответов доступен только премиум-пользователям" }, { status: 403 });
+  if (!(await assistantAccess(user)).allowed) return NextResponse.json({ error: "Помощник ответов доступен только премиум-пользователям" }, { status: 403 });
   if (!features.AI_CONFIGURED) return NextResponse.json({ error: AI_NOT_CONFIGURED_MESSAGE }, { status: 503 });
 
   const body = await req.json().catch(() => ({}));
