@@ -73,6 +73,13 @@ export default function AdminLearningPage() {
       setPresentations(d.items ?? []);
       setBlob(!!d.blob);
     });
+  // Сдвинуть презентацию на одну позицию: сразу на экране, затем сохранить весь порядок.
+  function move(i: number, dir: -1 | 1) {
+    const next = [...presentations];
+    [next[i], next[i + dir]] = [next[i + dir], next[i]];
+    setPresentations(next);
+    act(() => send("/api/learning/presentations", "PATCH", { ids: next.map((p) => p.id) }).then(loadPresentations), "Порядок сохранён");
+  }
   const loadItems = () => fetch("/api/learning/games?all=1").then((r) => r.json()).then((d) => setItems(d.items ?? []));
 
   useEffect(() => {
@@ -203,7 +210,7 @@ export default function AdminLearningPage() {
         {presentations.length === 0 ? (
           <div className="muted small">Презентаций пока нет</div>
         ) : (
-          presentations.map((p) => (
+          presentations.map((p, i) => (
             <div key={p.id} className="row between" style={{ padding: "10px 0", borderTop: "1px solid var(--border)" }}>
               <div>
                 <a href={viewerUrl(p)} target="_blank" rel="noreferrer" style={{ fontWeight: 800 }}>
@@ -215,6 +222,12 @@ export default function AdminLearningPage() {
                 </div>
               </div>
               <div className="row" style={{ gap: 6 }}>
+                <button className="btn btn-ghost btn-sm" title="Выше" disabled={i === 0} onClick={() => move(i, -1)}>
+                  ↑
+                </button>
+                <button className="btn btn-ghost btn-sm" title="Ниже" disabled={i === presentations.length - 1} onClick={() => move(i, 1)}>
+                  ↓
+                </button>
                 <button
                   className="btn btn-ghost btn-sm"
                   onClick={() => {

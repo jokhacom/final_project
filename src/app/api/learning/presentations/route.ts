@@ -38,9 +38,22 @@ export async function POST(req: NextRequest) {
 
   const title = String(form.get("title") || file.name.replace(/\.pdf$/i, "")).trim().slice(0, 200);
   const description = String(form.get("description") || "").trim().slice(0, 1000) || null;
+  const last = await db.presentation.aggregate({ _max: { order: true } });
   const item = await db.presentation.create({
-    data: { title, description, fileName: file.name, data, size: data.length, contentType: PRESENTATION_TYPES.pdf },
+    data: { title, description, fileName: file.name, data, size: data.length, contentType: PRESENTATION_TYPES.pdf, order: (last._max.order ?? 0) + 1 },
     select: { id: true, title: true },
   });
   return NextResponse.json({ item });
+}
+
+// Изменить порядок: { ids: [...] } — презентации в нужном порядке, order = позиция в списке.
+export async function PATCH(req: NextRequest) {
+  const admin = await requireAdmin();
+  if (admin instanceof NextResponse) return admin;
+
+  const body = await req.json().catch(() => ({}));
+  const ids = Array.isArray(body.ids) ? body.ids.filter((id: unknown): id is string => typeof id === "string") : [];
+  if (!ids.length) return NextResponse.json({ error: "Пустой список" }, { status: 400 });
+  await db.$transaction(ids.map((id: string, i: number) => db.presentation.updateMany({ where: { id }, data: { order: i } })));
+  return NextResponse.json({ ok: true });
 }

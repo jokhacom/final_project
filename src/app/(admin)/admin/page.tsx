@@ -397,8 +397,11 @@ export default function AdminHome() {
           </div>
           <div className="row between">
             <div>
-              <div style={{ fontWeight: 800 }}>Ежедневный мини-тест (3 вопроса)</div>
-              <div className="muted small">API: /api/daily-quiz</div>
+              <div style={{ fontWeight: 800 }}>☀️ Вопросы дня (3 вопроса)</div>
+              <div className="muted small">
+                Карточка вверху страницы «Уровни»: раз в день у каждого сотрудника 3 своих вопроса с вариантами ответа из банка, ответ сразу с
+                пояснением, без конфет; серия дней подряд 🔥.
+              </div>
             </div>
             <button className={`btn ${dailyQuiz ? "btn-primary" : "btn-ghost"}`} onClick={toggleDailyQuiz}>
               {dailyQuiz ? "Включён" : "Выключен"}

@@ -92,8 +92,8 @@ export default function LearnPage() {
                 <div className="pres-cover" style={{ background: cover.bg, color: cover.fg }}>
                   <div className="pres-cover-title">{p.title}</div>
                   <div className="pres-cover-bottom">
-                    {/* Номер по порядку загрузки: у новой презентации — самый большой. */}
-                    <span className="pres-cover-num">{presentations.length - i}</span>
+                    {/* Номер по порядку, который задал администратор. */}
+                    <span className="pres-cover-num">{i + 1}</span>
                     {p.description && <span className="pres-cover-tag">{p.description}</span>}
                   </div>
                 </div>

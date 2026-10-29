@@ -27,8 +27,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const stored = await put(`presentations/${Date.now()}.${extOf(fileName)}`, data, { access: "public", contentType, addRandomSuffix: true });
+    const last = await db.presentation.aggregate({ _max: { order: true } });
     const item = await db.presentation.create({
       data: {
+        order: (last._max.order ?? 0) + 1, // новая — в конец списка
         title: String(body.title || fileName.replace(/\.(pdf|pptx?)$/i, "")).trim().slice(0, 200),
         description: String(body.description || "").trim().slice(0, 1000) || null,
         fileName,
