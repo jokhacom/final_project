@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDay, type PremiumState } from "@/lib/premium";
+import { formatDay, LIMIT_PERIOD_LABEL, type LimitPeriod, type PremiumState } from "@/lib/premium";
 
+type Limit = { limit: number; period: LimitPeriod; used: number; left: number } | null;
 type Reply = { found: boolean; ru: string; uz: string; uzNew: string; note?: string };
 
 const VERSIONS: { key: "ru" | "uz" | "uzNew"; label: string }[] = [
@@ -13,7 +14,7 @@ const VERSIONS: { key: "ru" | "uz" | "uzNew"; label: string }[] = [
 
 // «Помощник ответов» (премиум): сотрудник вставляет сообщение клиента — ИИ даёт готовый ответ по шаблонам компании.
 export default function AssistantPage() {
-  const [access, setAccess] = useState<{ allowed: boolean; state: PremiumState; from: string | null; until: string | null } | null>(null);
+  const [access, setAccess] = useState<{ allowed: boolean; state: PremiumState; from: string | null; until: string | null; limit: Limit } | null>(null);
   const allowed = access?.allowed ?? null;
   const [message, setMessage] = useState("");
   const [reply, setReply] = useState<Reply | null>(null);
@@ -24,8 +25,8 @@ export default function AssistantPage() {
   useEffect(() => {
     fetch("/api/assistant")
       .then((r) => r.json())
-      .then((d) => setAccess({ allowed: !!d.allowed, state: d.state ?? "off", from: d.from ?? null, until: d.until ?? null }))
-      .catch(() => setAccess({ allowed: false, state: "off", from: null, until: null }));
+      .then((d) => setAccess({ allowed: !!d.allowed, state: d.state ?? "off", from: d.from ?? null, until: d.until ?? null, limit: d.limit ?? null }))
+      .catch(() => setAccess({ allowed: false, state: "off", from: null, until: null, limit: null }));
   }, []);
 
   async function ask() {
@@ -35,6 +36,8 @@ export default function AssistantPage() {
     const res = await fetch("/api/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) }).catch(() => null);
     const d = await res?.json().catch(() => ({}));
     setLoading(false);
+    // Остаток лимита приходит и с ответом, и с отказом «лимит исчерпан».
+    if (d?.limit !== undefined) setAccess((a) => (a ? { ...a, limit: d.limit } : a));
     if (!res?.ok) return setError(d?.error ?? "Нет связи — попробуйте ещё раз");
     setReply(d);
   }
@@ -68,7 +71,16 @@ export default function AssistantPage() {
       <div>
         <h1 style={{ marginBottom: 4 }}>🤖 Помощник ответов</h1>
         <p className="muted" style={{ margin: 0 }}>Вставьте сообщение клиента — ИИ составит ответ по шаблонам и правилам компании. Перед отправкой проверьте ответ.</p>
-        {access?.until && <p className="muted small" style={{ margin: "4px 0 0" }}>⭐ Премиум до {formatDay(access.until)}</p>}
+        {(access?.until || access?.limit) && (
+          <p className="muted small" style={{ margin: "4px 0 0" }}>
+            {[
+              access.until && `⭐ Премиум до ${formatDay(access.until)}`,
+              access.limit && `Осталось ответов: ${access.limit.left} из ${access.limit.limit} ${LIMIT_PERIOD_LABEL[access.limit.period]}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        )}
       </div>
 
       <div className="card stack">
@@ -85,7 +97,7 @@ export default function AssistantPage() {
         />
         <div className="row between">
           <span className="muted small">Ctrl + Enter — получить ответ</span>
-          <button className="btn btn-primary" disabled={loading || !message.trim()} onClick={ask}>
+          <button className="btn btn-primary" disabled={loading || !message.trim() || access?.limit?.left === 0} onClick={ask}>
             {loading ? "ИИ составляет ответ…" : "✨ Получить ответ"}
           </button>
         </div>
