@@ -1,13 +1,27 @@
 import { db } from "./db";
-import { premiumState, type PremiumState } from "./premium";
+import { isLimitPeriod, limitPeriodStart, premiumState, type LimitPeriod, type PremiumState } from "./premium";
 import { isAdmin, type SessionUser } from "./session";
 
-// «Помощник ответов»: доступ — у администраторов и у сотрудников с действующим премиумом.
+// Сколько ответов осталось по лимиту премиума (null — без лимита).
+export type AssistantLimit = { limit: number; period: LimitPeriod; used: number; left: number } | null;
+
+export async function usageLimit(u: { id: string; premiumFrom: string | null; premiumLimit: number | null; premiumLimitPeriod: string }): Promise<AssistantLimit> {
+  if (u.premiumLimit === null) return null;
+  const period = isLimitPeriod(u.premiumLimitPeriod) ? u.premiumLimitPeriod : "day";
+  const used = await db.assistantUse.count({ where: { userId: u.id, createdAt: { gte: limitPeriodStart(period, u.premiumFrom) } } });
+  return { limit: u.premiumLimit, period, used, left: Math.max(0, u.premiumLimit - used) };
+}
+
+// «Помощник ответов»: доступ — у администраторов (без лимита) и у сотрудников с действующим премиумом.
 export async function assistantAccess(user: SessionUser) {
-  if (isAdmin(user)) return { allowed: true, state: "active" as PremiumState, from: null, until: null };
-  const row = await db.user.findUnique({ where: { id: user.id }, select: { premium: true, premiumFrom: true, premiumUntil: true } });
+  if (isAdmin(user)) return { allowed: true, state: "active" as PremiumState, from: null, until: null, limit: null as AssistantLimit };
+  const row = await db.user.findUnique({
+    where: { id: user.id },
+    select: { id: true, premium: true, premiumFrom: true, premiumUntil: true, premiumLimit: true, premiumLimitPeriod: true },
+  });
   const state = row ? premiumState(row) : "off";
-  return { allowed: state === "active", state, from: row?.premiumFrom ?? null, until: row?.premiumUntil ?? null };
+  const limit = row && state === "active" ? await usageLimit(row) : null;
+  return { allowed: state === "active", state, from: row?.premiumFrom ?? null, until: row?.premiumUntil ?? null, limit };
 }
 
 // Сколько текста файлов отправляем ИИ за один ответ (~100 тыс. токенов). Больше — дорого и медленно.

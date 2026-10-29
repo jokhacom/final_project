@@ -5,9 +5,9 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LEVELS, OPEN_QUESTION_SECONDS, levelInfo, type LevelId } from "@/lib/levels";
 import { useAdminStatus } from "@/components/admin/useAdminStatus";
-import { addMonths, formatDay, premiumState, tashkentToday } from "@/lib/premium";
+import { addMonths, formatDay, LIMIT_PERIOD_LABEL, premiumState, tashkentToday, type LimitPeriod } from "@/lib/premium";
 
-type User = { id: string; name: string; username: string; role: string; premium: boolean; premiumFrom: string | null; premiumUntil: string | null; leaderboard: { testsDone: number; bestCandy: number } | null };
+type User = { id: string; name: string; username: string; role: string; premium: boolean; premiumFrom: string | null; premiumUntil: string | null; premiumLimit: number | null; premiumLimitPeriod: LimitPeriod; premiumUsed: number | null; leaderboard: { testsDone: number; bestCandy: number } | null };
 
 const ROLE_LABEL: Record<string, string> = { EMPLOYEE: "Сотрудник", ADMIN: "Администратор", SUPERADMIN: "Суперадмин" };
 
@@ -40,7 +40,8 @@ export default function AdminHome() {
   const status = useAdminStatus();
   const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // Окно «Премиум для …: с — по»: открывается при включении галочки или по ✏️ у срока.
-  const [premiumEdit, setPremiumEdit] = useState<{ user: User; from: string; until: string } | null>(null);
+  // limit — строка, чтобы поле можно было стереть; пусто — без лимита ответов.
+  const [premiumEdit, setPremiumEdit] = useState<{ user: User; from: string; until: string; limit: string; period: LimitPeriod } | null>(null);
   const loadUsers = () =>
     fetch("/api/admin/users")
       .then((r) => r.json())
@@ -271,13 +272,53 @@ export default function AdminHome() {
               ))}
             </div>
             <div className="muted small">Обе даты включительно. Пустое поле — без ограничения (например, без «по» — бессрочно).</div>
+            <div className="row" style={{ gap: 10 }}>
+              <label className="small">
+                Лимит ответов{" "}
+                <input
+                  type="number"
+                  min={1}
+                  className="input"
+                  style={{ width: 90 }}
+                  placeholder="∞"
+                  value={premiumEdit.limit}
+                  onChange={(e) => setPremiumEdit({ ...premiumEdit, limit: e.target.value })}
+                />
+              </label>
+              <select
+                className="select"
+                style={{ width: "auto", padding: "6px 10px" }}
+                value={premiumEdit.period}
+                disabled={!premiumEdit.limit}
+                onChange={(e) => setPremiumEdit({ ...premiumEdit, period: e.target.value as LimitPeriod })}
+                aria-label="Период лимита"
+              >
+                {(Object.keys(LIMIT_PERIOD_LABEL) as LimitPeriod[]).map((p) => (
+                  <option key={p} value={p}>
+                    {LIMIT_PERIOD_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+              {["5", "10", "20", ""].map((n) => (
+                <button key={n || "none"} className="btn btn-ghost btn-sm" onClick={() => setPremiumEdit({ ...premiumEdit, limit: n })}>
+                  {n || "без лимита"}
+                </button>
+              ))}
+            </div>
+            <div className="muted small">Сколько готовых ответов сотрудник может получить: в день, в месяц или на весь срок премиума. Пустое поле — без лимита.</div>
             <div className="row" style={{ gap: 8 }}>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={() => {
-                  const { user, from, until } = premiumEdit;
+                  const { user, from, until, limit, period: limitPeriod } = premiumEdit;
                   const period = from || until ? `${from ? ` с ${formatDay(from)}` : ""}${until ? ` по ${formatDay(until)}` : ""}` : " бессрочно";
-                  userAction(user, "PATCH", { premium: true, premiumFrom: from || null, premiumUntil: until || null }, `${user.name}: премиум${period}`).then(
+                  const limitText = limit ? `, лимит ответов: ${limit} ${LIMIT_PERIOD_LABEL[limitPeriod]}` : ", без лимита ответов";
+                  userAction(
+                    user,
+                    "PATCH",
+                    { premium: true, premiumFrom: from || null, premiumUntil: until || null, premiumLimit: limit || null, premiumLimitPeriod: limitPeriod },
+                    `${user.name}: премиум${period}${limitText}`
+                  ).then(
                     (ok) => ok && setPremiumEdit(null)
                   );
                 }}
@@ -335,7 +376,7 @@ export default function AdminHome() {
                           aria-label={`Премиум для ${u.name}`}
                           onChange={(e) =>
                             e.target.checked
-                              ? setPremiumEdit({ user: u, from: tashkentToday(), until: "" })
+                              ? setPremiumEdit({ user: u, from: tashkentToday(), until: "", limit: u.premiumLimit ? String(u.premiumLimit) : "", period: u.premiumLimitPeriod })
                               : userAction(u, "PATCH", { premium: false }, `${u.name}: премиум выключен`)
                           }
                         />
@@ -343,8 +384,16 @@ export default function AdminHome() {
                         {u.premium && isSuper && (
                           <button
                             className="btn btn-ghost btn-sm"
-                            title="Изменить срок"
-                            onClick={() => setPremiumEdit({ user: u, from: u.premiumFrom ?? "", until: u.premiumUntil ?? "" })}
+                            title="Изменить срок и лимит"
+                            onClick={() =>
+                              setPremiumEdit({
+                                user: u,
+                                from: u.premiumFrom ?? "",
+                                until: u.premiumUntil ?? "",
+                                limit: u.premiumLimit ? String(u.premiumLimit) : "",
+                                period: u.premiumLimitPeriod,
+                              })
+                            }
                           >
                             ✏️
                           </button>
@@ -506,7 +555,7 @@ export default function AdminHome() {
   );
 }
 
-// Срок премиума в таблице сотрудников: обе даты сразу («с 29.10.2026 по 29.11.2026») и под ними состояние.
+// Срок премиума в таблице сотрудников: обе даты сразу («с 29.10.2026 по 29.11.2026»), под ними состояние и лимит ответов.
 function PremiumPeriod({ u }: { u: User }) {
   const state = premiumState(u);
   const from = u.premiumFrom ? `с ${formatDay(u.premiumFrom)}` : "";
@@ -517,6 +566,12 @@ function PremiumPeriod({ u }: { u: User }) {
       <span style={{ whiteSpace: "nowrap" }}>{u.premiumUntil ? [from, until].filter(Boolean).join(" ") : from + until}</span>
       <br />
       <span style={{ color: state === "expired" ? "var(--danger)" : state === "active" ? "var(--success)" : "var(--muted)" }}>{status}</span>
+      <br />
+      <span className="muted" style={{ whiteSpace: "nowrap" }}>
+        {u.premiumLimit === null
+          ? "ответов: без лимита"
+          : `ответов: ${u.premiumUsed ?? 0} из ${u.premiumLimit} ${LIMIT_PERIOD_LABEL[u.premiumLimitPeriod] ?? ""}`}
+      </span>
     </span>
   );
 }

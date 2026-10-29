@@ -5,6 +5,20 @@ export type PremiumFields = { premium: boolean; premiumFrom: string | null; prem
 
 export const tashkentToday = (d = new Date()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(d);
 
+// Лимит ответов помощника: сколько штук и за какой период.
+export const LIMIT_PERIODS = ["day", "month", "total"] as const;
+export type LimitPeriod = (typeof LIMIT_PERIODS)[number];
+export const isLimitPeriod = (v: unknown): v is LimitPeriod => LIMIT_PERIODS.includes(v as LimitPeriod);
+export const LIMIT_PERIOD_LABEL: Record<LimitPeriod, string> = { day: "в день", month: "в месяц", total: "на весь срок" };
+
+// С какого момента считать ответы: начало сегодняшнего дня / месяца по Ташкенту (UTC+5, без перехода на летнее время)
+// или начало срока премиума (без даты «с» — все ответы).
+export function limitPeriodStart(period: LimitPeriod, premiumFrom: string | null, today = tashkentToday()) {
+  if (period === "day") return new Date(`${today}T00:00:00+05:00`);
+  if (period === "month") return new Date(`${today.slice(0, 7)}-01T00:00:00+05:00`);
+  return premiumFrom ? new Date(`${premiumFrom}T00:00:00+05:00`) : new Date(0);
+}
+
 export function premiumState(u: PremiumFields, today = tashkentToday()): PremiumState {
   if (!u.premium) return "off";
   if (u.premiumFrom && today < u.premiumFrom) return "soon";

@@ -51,6 +51,8 @@ model User {
   premium       Boolean  @default(false) // доступ к «Помощнику ответов»; включает только суперадминистратор
   premiumFrom   String?  // срок премиума: с какого дня и по какой включительно, "YYYY-MM-DD" по Ташкенту; null — без ограничения
   premiumUntil  String?
+  premiumLimit  Int?     // сколько ответов помощника можно получить за период; null — без лимита
+  premiumLimitPeriod String @default("day") // day — в день, month — в месяц, total — на весь срок премиума
 
   attempts        TestAttempt[]
   achievements    UserAchievement[]
@@ -59,6 +61,7 @@ model User {
   weakTopics      WeakTopic[]
   typingResults   TypingResult[]
   dailyQuiz       DailyQuizResult[]
+  assistantUses   AssistantUse[]
 }
 
 model Material {
@@ -308,4 +311,14 @@ model ReplyDoc {
   fileName  String?  // null — текст вставлен вручную
   content   String
   createdAt DateTime @default(now())
+}
+
+// Каждый полученный ответ «Помощника ответов» — для лимита ответов премиума.
+model AssistantUse {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

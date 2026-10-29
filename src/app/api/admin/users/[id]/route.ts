@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { isLimitPeriod } from "@/lib/premium";
 import { requireSuperadmin } from "@/lib/session";
 
 // Управление сотрудниками — только суперадминистратор.
@@ -24,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (target.error) return target.error;
 
   const body = await req.json();
-  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date; premium?: boolean; premiumFrom?: string | null; premiumUntil?: string | null } = {};
+  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date; premium?: boolean; premiumFrom?: string | null; premiumUntil?: string | null; premiumLimit?: number | null; premiumLimitPeriod?: string } = {};
   if (typeof body.premium === "boolean") data.premium = body.premium; // доступ к «Помощнику ответов»
   // Срок премиума: "YYYY-MM-DD" или пусто — без ограничения.
   for (const key of ["premiumFrom", "premiumUntil"] as const) {
@@ -32,6 +33,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const v = body[key] ? String(body[key]) : null;
     if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return NextResponse.json({ error: "Неверная дата" }, { status: 400 });
     data[key] = v;
+  }
+  // Лимит ответов помощника: целое число от 1 или пусто — без лимита; период — день, месяц или весь срок.
+  if (body.premiumLimit !== undefined) {
+    const n = body.premiumLimit === null || body.premiumLimit === "" ? null : Number(body.premiumLimit);
+    if (n !== null && (!Number.isInteger(n) || n < 1 || n > 100000)) return NextResponse.json({ error: "Лимит — целое число от 1" }, { status: 400 });
+    data.premiumLimit = n;
+  }
+  if (body.premiumLimitPeriod !== undefined) {
+    if (!isLimitPeriod(body.premiumLimitPeriod)) return NextResponse.json({ error: "Период лимита: день, месяц или весь срок" }, { status: 400 });
+    data.premiumLimitPeriod = body.premiumLimitPeriod;
   }
   if (data.premiumFrom && data.premiumUntil && data.premiumFrom > data.premiumUntil) {
     return NextResponse.json({ error: "Дата «с» позже даты «по»" }, { status: 400 });
