@@ -14,7 +14,7 @@ async function loadTarget(id: string, selfId: string) {
   return { user };
 }
 
-// Сменить роль (EMPLOYEE ↔ ADMIN) или задать новый пароль.
+// Сменить роль (EMPLOYEE ↔ ADMIN), премиум-доступ или задать новый пароль.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireSuperadmin();
   if (admin instanceof NextResponse) return admin;
@@ -24,7 +24,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (target.error) return target.error;
 
   const body = await req.json();
-  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date } = {};
+  const data: { role?: "EMPLOYEE" | "ADMIN"; passwordHash?: string; attemptsResetAt?: Date; premium?: boolean } = {};
+  if (typeof body.premium === "boolean") data.premium = body.premium; // доступ к «Помощнику ответов»
   if (body.resetAttempts === true) data.attemptsResetAt = new Date(); // история сохраняется, лимит считается заново
   if (body.role !== undefined) {
     if (body.role !== "EMPLOYEE" && body.role !== "ADMIN") {
