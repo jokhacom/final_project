@@ -28,9 +28,26 @@ export async function assistantAccess(user: SessionUser) {
 export const MAX_KNOWLEDGE_CHARS = 400_000;
 export const MAX_CLIENT_MESSAGE = 3000;
 
+// Брать ли в помощник ещё и документы из «Материалов» (Редполитика и т. п.). По умолчанию — да.
+export const USE_MATERIALS_KEY = "assistant_use_materials";
+export async function useMaterials() {
+  const s = await db.setting.findUnique({ where: { key: USE_MATERIALS_KEY } });
+  return s?.value !== "false";
+}
+
+// Действующие документы «Материалов» с текстом (старые версии не берём).
+export const activeMaterials = () =>
+  db.material.findMany({ where: { isActive: true, content: { not: null } }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, content: true } });
+
 // Все файлы одним текстом, с названиями — чтобы ИИ видел, где какой шаблон.
+// Сначала шаблоны помощника, потом документы «Материалов»: если текста больше лимита, обрезаются документы, а не шаблоны.
 export async function loadKnowledge() {
   const docs = await db.replyDoc.findMany({ orderBy: { createdAt: "asc" }, select: { title: true, content: true } });
-  const text = docs.map((d) => `=== ${d.title} ===\n${d.content.trim()}`).join("\n\n");
-  return { count: docs.length, text: text.slice(0, MAX_KNOWLEDGE_CHARS), truncated: text.length > MAX_KNOWLEDGE_CHARS };
+  const materials = (await useMaterials()) ? await activeMaterials() : [];
+  const parts = [
+    ...docs.map((d) => `=== Шаблоны и примеры ответов: ${d.title} ===\n${d.content.trim()}`),
+    ...materials.map((m) => `=== Правила компании: ${m.title} ===\n${(m.content ?? "").trim()}`),
+  ];
+  const text = parts.join("\n\n");
+  return { count: parts.length, text: text.slice(0, MAX_KNOWLEDGE_CHARS), truncated: text.length > MAX_KNOWLEDGE_CHARS };
 }

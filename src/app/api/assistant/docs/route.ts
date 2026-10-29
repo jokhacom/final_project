@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { db } from "@/lib/db";
 import { extractText } from "@/lib/parsing/extractText";
-import { MAX_KNOWLEDGE_CHARS } from "@/lib/assistant";
+import { activeMaterials, MAX_KNOWLEDGE_CHARS, useMaterials } from "@/lib/assistant";
 import { requireSuperadmin } from "@/lib/session";
 
 // Файлы «Помощника ответов» (только суперадминистратор). Сам файл не храним — только текст.
@@ -12,7 +12,11 @@ export async function GET() {
 
   const docs = await db.replyDoc.findMany({ orderBy: { createdAt: "asc" } });
   const items = docs.map(({ content, ...d }) => ({ ...d, chars: content.length, preview: content.slice(0, 300) }));
-  return NextResponse.json({ items, totalChars: docs.reduce((n, d) => n + d.content.length, 0), maxChars: MAX_KNOWLEDGE_CHARS });
+  // Документы «Материалов», которые помощник тоже читает (если включено).
+  const withMaterials = await useMaterials();
+  const materials = (await activeMaterials()).map((m) => ({ id: m.id, title: m.title, chars: m.content?.length ?? 0 }));
+  const totalChars = docs.reduce((n, d) => n + d.content.length, 0) + (withMaterials ? materials.reduce((n, m) => n + m.chars, 0) : 0);
+  return NextResponse.json({ items, materials, useMaterials: withMaterials, totalChars, maxChars: MAX_KNOWLEDGE_CHARS });
 }
 
 // Добавить файл (PDF/DOCX/TXT) или вставленный текст: form-data с file или text, и title.
