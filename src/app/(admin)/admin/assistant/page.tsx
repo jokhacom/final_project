@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+type Material = { id: string; title: string; chars: number };
 type Doc = { id: string; title: string; fileName: string | null; chars: number; preview: string; createdAt: string };
 
 // Файлы «Помощника ответов»: шаблоны, примеры ответов, правила. По ним ИИ составляет ответ клиенту.
@@ -10,6 +11,8 @@ type Doc = { id: string; title: string; fileName: string | null; chars: number; 
 export default function AdminAssistantPage() {
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [total, setTotal] = useState({ chars: 0, max: 0 });
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [withMaterials, setWithMaterials] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
@@ -24,6 +27,8 @@ export default function AdminAssistantPage() {
       if (!r.ok) return setError(d.error ?? "Не удалось загрузить");
       setDocs(d.items);
       setTotal({ chars: d.totalChars, max: d.maxChars });
+      setMaterials(d.materials ?? []);
+      setWithMaterials(d.useMaterials !== false);
     });
 
   useEffect(() => {
@@ -55,13 +60,20 @@ export default function AdminAssistantPage() {
     load();
   }
 
+  async function toggleMaterials() {
+    const next = !withMaterials;
+    setWithMaterials(next);
+    await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "assistant_use_materials", value: String(next) }) });
+    load();
+  }
+
   if (error) return <div className="alert alert-error">{error}</div>;
 
   return (
     <div className="stack">
       <h1>🤖 Помощник ответов</h1>
       <p className="muted small" style={{ marginTop: -8 }}>
-        Загрузите шаблоны, примеры ответов и правила. Сотрудник вставляет сообщение клиента — ИИ составляет готовый ответ только по этим файлам: на русском, на
+        Загрузите шаблоны, примеры ответов и правила. Сотрудник вставляет сообщение клиента — ИИ составляет готовый ответ только по этим файлам и документам «Материалов»: на русском, на
         узбекском и на узбекском новым алфавитом. Доступ даёте вы: «Обзор» → «Сотрудники» → ⭐ Премиум. Администраторам помощник доступен всегда.{" "}
         <Link href="/assistant">Открыть помощник →</Link>
       </p>
@@ -89,12 +101,40 @@ export default function AdminAssistantPage() {
       </div>
 
       <div className="card">
-        <h2>Файлы ({docs?.length ?? 0})</h2>
+        <div className="row between" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
+          <div>
+            <h2 style={{ margin: 0 }}>📚 Документы из «Материалов»</h2>
+            <p className="muted small" style={{ margin: "4px 0 0" }}>
+              Помощник читает и документы, по которым создаются тесты (Редполитика, Tone of Voice): отвечает по их правилам, даже если подходящего шаблона нет.
+              Загружать их сюда второй раз не нужно.
+            </p>
+          </div>
+          <label className="row small" style={{ gap: 6, flex: "none", fontWeight: 800, cursor: "pointer" }}>
+            <input type="checkbox" checked={withMaterials} onChange={toggleMaterials} />
+            Использовать
+          </label>
+        </div>
+        {materials.length === 0 ? (
+          <p className="muted small">
+            В «Материалах» пока нет документов с текстом. <Link href="/admin/materials">Загрузить →</Link>
+          </p>
+        ) : (
+          materials.map((m) => (
+            <div key={m.id} className="row between small" style={{ padding: "8px 0", borderTop: "1px solid var(--border)", opacity: withMaterials ? 1 : 0.5 }}>
+              <span style={{ fontWeight: 800 }}>{m.title}</span>
+              <span className="muted">{m.chars.toLocaleString("ru-RU")} символов</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Шаблоны и примеры ответов ({docs?.length ?? 0})</h2>
         {docs && total.max > 0 && (
           <p className="muted small" style={{ marginTop: -8 }}>
-            Объём: {total.chars.toLocaleString("ru-RU")} символов из {total.max.toLocaleString("ru-RU")}. Всё отправляется ИИ с каждым вопросом, поэтому лишнее лучше
+            Всего для ИИ{withMaterials && materials.length ? " (вместе с «Материалами»)" : ""}: {total.chars.toLocaleString("ru-RU")} символов из {total.max.toLocaleString("ru-RU")}. Всё отправляется ИИ с каждым вопросом, поэтому лишнее лучше
             удалять.
-            {total.chars > total.max && <strong> Лимит превышен — последние файлы ИИ не увидит.</strong>}
+            {total.chars > total.max && <strong> Лимит превышен — конец документов «Материалов» ИИ не увидит (шаблоны — всегда).</strong>}
           </p>
         )}
         {!docs ? (
