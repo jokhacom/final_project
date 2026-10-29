@@ -37,6 +37,7 @@ export const config = {
     "/whats-new",
     "/certificate/:path*",
     "/typing",
+    "/assistant",
     "/files/:path*",
   ],
 };

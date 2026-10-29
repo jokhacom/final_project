@@ -6,7 +6,7 @@ import Link from "next/link";
 import { LEVELS, OPEN_QUESTION_SECONDS, levelInfo, type LevelId } from "@/lib/levels";
 import { useAdminStatus } from "@/components/admin/useAdminStatus";
 
-type User = { id: string; name: string; username: string; role: string; leaderboard: { testsDone: number; bestCandy: number } | null };
+type User = { id: string; name: string; username: string; role: string; premium: boolean; leaderboard: { testsDone: number; bestCandy: number } | null };
 
 const ROLE_LABEL: Record<string, string> = { EMPLOYEE: "Сотрудник", ADMIN: "Администратор", SUPERADMIN: "Суперадмин" };
 
@@ -234,6 +234,7 @@ export default function AdminHome() {
                 <th>Имя</th>
                 <th>Логин</th>
                 <th>Роль</th>
+                <th title="Доступ к «Помощнику ответов»">⭐ Премиум</th>
                 <th>Тестов</th>
                 <th>Лучший</th>
                 {isSuper && <th></th>}
@@ -257,6 +258,21 @@ export default function AdminHome() {
                       </select>
                     ) : (
                       ROLE_LABEL[u.role] ?? u.role
+                    )}
+                  </td>
+                  <td>
+                    {u.role !== "EMPLOYEE" ? (
+                      <span className="muted small" title="Администраторам помощник доступен всегда">всегда</span>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={u.premium}
+                        disabled={!isSuper}
+                        aria-label={`Премиум для ${u.name}`}
+                        onChange={(e) =>
+                          userAction(u, "PATCH", { premium: e.target.checked }, e.target.checked ? `${u.name}: премиум включён` : `${u.name}: премиум выключен`)
+                        }
+                      />
                     )}
                   </td>
                   <td>{u.leaderboard?.testsDone ?? 0}</td>

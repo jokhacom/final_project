@@ -33,13 +33,13 @@ boʻlim ariza hujjat pasport imzo shartnoma kafolat sifat xavfsiz parol kod ilov
 taklif mamnun xursand minnatdor kechirasiz salom xayr albatta tayyor bepul qulay oson qiyin tushunarli aniq shoshilinch navbat
 bajarildi tasdiqlash bekor qaytarish almashtirish choʻntak gʻoya oʻzbek tilida gapirish soʻz gap matn`;
 
-// Действующая латиница → проект нового алфавита.
+// Действующая латиница → проект нового алфавита. После o/g принимаем и ‘ ', как часто печатают вместо ʻ.
 export function toNewAlphabet(text: string) {
   return text
-    .replace(/Oʻ/g, "Ó").replace(/oʻ/g, "ó")
-    .replace(/Gʻ/g, "Ǵ").replace(/gʻ/g, "ǵ")
-    .replace(/Sh/g, "Ş").replace(/sh/g, "ş")
-    .replace(/Ch/g, "Ç").replace(/ch/g, "ç");
+    .replace(/O[ʻ‘']/g, "Ó").replace(/o[ʻ‘']/g, "ó")
+    .replace(/G[ʻ‘']/g, "Ǵ").replace(/g[ʻ‘']/g, "ǵ")
+    .replace(/SH/g, "Ş").replace(/Sh/g, "Ş").replace(/sh/g, "ş")
+    .replace(/CH/g, "Ç").replace(/Ch/g, "Ç").replace(/ch/g, "ç");
 }
 
 const split = (s: string) => s.split(/\s+/).filter(Boolean);

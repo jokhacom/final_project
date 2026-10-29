@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/admin/questions", label: "Вопросы" },
   { href: "/admin/review", label: "Проверка" },
   { href: "/admin/learning", label: "Обучение" },
+  { href: "/admin/assistant", label: "Помощник" },
   { href: "/admin/analytics", label: "Аналитика" },
   { href: "/admin/feedback", label: "Обратная связь" },
   { href: "/admin/changelog", label: "Что нового" },

@@ -1,4 +1,4 @@
-import type { AIProvider, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, Level } from "./provider";
+import type { AIProvider, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
@@ -249,6 +249,33 @@ ${avoid.join("\n") || "—"}
       return (Array.isArray(list) ? list : []).filter(
         (q) => q?.prompt && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length
       );
+    },
+
+    async generateReply(knowledge, clientMessage) {
+      const prompt = `Ты — опытный сотрудник службы поддержки компании. Тебе пишет клиент, нужно составить готовый ответ, который сотрудник отправит клиенту.
+Файлы компании — шаблоны, примеры ответов и правила. Отвечай ТОЛЬКО по ним:
+"""
+${knowledge}
+"""
+
+Сообщение клиента:
+"""
+${clientMessage}
+"""
+
+Как составить ответ:
+- если в файлах есть подходящий шаблон или пример ответа — бери его за основу и подстрой под сообщение клиента; соблюдай тон, обращение, приветствие и подпись, как в примерах;
+- факты (сроки, суммы, условия, порядок действий, контакты) — только из файлов; ничего не придумывай и не упоминай другие компании, банки и сервисы;
+- если в файлах нет ответа на вопрос клиента — found: false; ru и uz тогда — вежливый короткий ответ без выдуманных фактов (например, уточнить детали или сказать, что вопрос передан специалисту), а в note — чего не хватает в файлах;
+- ответ вежливый, на «вы», без канцелярита, готов к отправке: без пометок вроде «[имя]», если в шаблоне так не принято;
+- ru — на русском языке; uz — тот же ответ на ${UZ_ORTHOGRAPHY}; оба по смыслу одинаковые;
+- note — одно короткое предложение для сотрудника по-русски: на какой шаблон или правило опирался ответ.
+${CONTEXT_RULE}
+Ответь строго JSON без markdown:
+{"found": true, "ru": "...", "uz": "...", "note": "..."}`;
+      const parsed = parseJson<Partial<GeneratedReply>>(await complete(prompt, 3000));
+      if (!parsed?.ru || !parsed?.uz) throw new Error("ИИ не вернул ответ");
+      return { found: parsed.found !== false, ru: String(parsed.ru).trim(), uz: String(parsed.uz).trim(), note: parsed.note ? String(parsed.note) : undefined };
     },
 
     async gradeOpenAnswer(question, expectedKeywords, answer, materialContext) {

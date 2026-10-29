@@ -48,6 +48,7 @@ model User {
   role          Role     @default(EMPLOYEE)
   createdAt     DateTime @default(now())
   attemptsResetAt DateTime? // попытки, начатые до этого момента, не считаются в лимит (кнопка «Сбросить попытки»)
+  premium       Boolean  @default(false) // доступ к «Помощнику ответов»; включает только суперадминистратор
 
   attempts        TestAttempt[]
   achievements    UserAchievement[]
@@ -295,4 +296,14 @@ model GameItem {
   topicId     String?
   topic       Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+}
+
+// Файлы для «Помощника ответов»: шаблоны, примеры ответов, правила. Хранится только текст —
+// ИИ составляет по нему готовый ответ клиенту (см. /api/assistant).
+model ReplyDoc {
+  id        String   @id @default(cuid())
+  title     String
+  fileName  String?  // null — текст вставлен вручную
+  content   String
+  createdAt DateTime @default(now())
 }

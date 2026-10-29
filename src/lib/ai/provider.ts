@@ -51,6 +51,14 @@ export interface GeneratedLanguageItem {
   explanation?: string;
 }
 
+// Готовый ответ клиенту от «Помощника ответов». found — нашлось ли в файлах, на что опереться.
+export interface GeneratedReply {
+  found: boolean;
+  ru: string;
+  uz: string;
+  note?: string; // коротко для сотрудника: на какой шаблон опирался или чего не хватает
+}
+
 export interface ExtractedTopic {
   name: string;
   description?: string;
@@ -76,6 +84,9 @@ export interface AIProvider {
 
   // Вопросы «Грамотности» по русскому или узбекскому языку (не по документу). avoid — уже существующие, чтобы не повторяться.
   generateLanguageItems(language: "ru" | "uz", count: number, avoid: string[]): Promise<GeneratedLanguageItem[]>;
+
+  // Готовый ответ на вопрос клиента строго по файлам «Помощника ответов» — на русском и узбекском.
+  generateReply(knowledge: string, clientMessage: string): Promise<GeneratedReply>;
 
   // Проверка СТРОГО по materialContext (правило + цитата, иначе весь текст материала).
   gradeOpenAnswer(question: string, expectedKeywords: string[], answer: string, materialContext: string | null): Promise<GradeResult>;
