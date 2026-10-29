@@ -393,6 +393,14 @@ export default function MaterialsAdminPage() {
             <button className="btn btn-primary" onClick={handleUpload} disabled={!file || !!busy}>
               {busy === "upload" ? "Загрузка..." : aiOn && autoCreate ? "Загрузить и создать тесты" : "Загрузить"}
             </button>
+            {/* Кнопка недоступна, пока на странице идёт другая операция, — объясняем почему. */}
+            {busy && busy !== "upload" && (
+              <div className="muted small" style={{ marginTop: 6 }}>
+                ⏳ Сейчас идёт другая операция (создание тестов, игр, анализ или удаление) — дождитесь её окончания внизу страницы или нажмите
+                «Остановить». Если ничего не идёт, обновите страницу (F5) и выберите файл заново.
+              </div>
+            )}
+            {!file && <div className="muted small" style={{ marginTop: 6 }}>Сначала выберите файл.</div>}
           </div>
           <div className="muted small">Файл до ~4 МБ. PDF должен содержать текст (не сканы страниц).</div>
         </div>
