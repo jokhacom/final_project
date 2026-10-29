@@ -55,6 +55,7 @@ model User {
   feedback        Feedback[]
   weakTopics      WeakTopic[]
   typingResults   TypingResult[]
+  dailyQuiz       DailyQuizResult[]
 }
 
 model Material {
@@ -167,6 +168,18 @@ model Answer {
   reviewedAt    DateTime?   // ответ проверен администратором вручную
   reviewedBy    String?     // id администратора, который проверил
   createdAt     DateTime    @default(now())
+}
+
+// «Вопросы дня»: 3 вопроса с вариантами раз в день. answers — { questionId: верно ли }.
+model DailyQuizResult {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // день по Ташкенту, YYYY-MM-DD
+  answers   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
 }
 
 // Результат теста скорости печати (как monkeytype): язык, длительность, скорость и точность.

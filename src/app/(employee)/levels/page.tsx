@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { LEVELS, OPEN_QUESTION_SECONDS } from "@/lib/levels";
+import { DailyQuiz } from "@/components/DailyQuiz";
 import { formatPenalty } from "@/lib/scoring";
 
 // «1 вопрос», «3 вопроса», «10 вопросов»
@@ -50,6 +51,8 @@ export default function LevelsPage() {
       <p className="muted">
         Выберите уровень. Каждая попытка — новый случайный набор вопросов: с вариантами ответа и открытые.
       </p>
+
+      <DailyQuiz />
 
       <div className="grid grid-2 mt">
         {LEVELS.map((l) => {
