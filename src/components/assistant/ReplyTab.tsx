@@ -8,7 +8,11 @@ import { callApi, FavButton, ReplyView, TONES, type ApiExtra, type ReplyResult }
 export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d: ApiExtra) => void }) {
   const [message, setMessage] = useState("");
   const [image, setImage] = useState("");
-  const [tone, setTone] = useState("default");
+  // Тонов можно выбрать несколько; ни одного — «Как в шаблонах».
+  const [tones, setTones] = useState<string[]>([]);
+  const toggleTone = (id: string) =>
+    id === "default" ? setTones([]) : setTones((list) => (list.includes(id) ? list.filter((t) => t !== id) : [...list, id]));
+  const toneActive = (id: string) => (id === "default" ? tones.length === 0 : tones.includes(id));
   const [reply, setReply] = useState<(ReplyResult & ApiExtra) | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +30,7 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
     setLoading(true);
     setError(null);
     setReply(null);
-    const { ok, data } = await callApi<ReplyResult>("/api/assistant", { mode: "reply", message, tone, image: image || undefined });
+    const { ok, data } = await callApi<ReplyResult>("/api/assistant", { mode: "reply", message, tones, image: image || undefined });
     setLoading(false);
     onExtra(data);
     if (!ok) return setError(data.error ?? "Ошибка");
@@ -73,9 +77,14 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
           </label>
         )}
         <div className="row" style={{ gap: 6 }}>
-          <span className="muted small">Тон:</span>
+          <span className="muted small">Тон (можно несколько):</span>
           {TONES.map((t) => (
-            <button key={t.id} className={`btn btn-sm ${tone === t.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setTone(t.id)}>
+            <button
+              key={t.id}
+              className={`btn btn-sm ${toneActive(t.id) ? "btn-primary" : "btn-ghost"}`}
+              aria-pressed={toneActive(t.id)}
+              onClick={() => toggleTone(t.id)}
+            >
               {t.label}
             </button>
           ))}

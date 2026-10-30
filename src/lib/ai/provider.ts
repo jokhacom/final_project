@@ -128,8 +128,8 @@ export interface AIProvider {
   generateLanguageItems(language: "ru" | "uz", count: number, avoid: string[]): Promise<GeneratedLanguageItem[]>;
 
   // Готовый ответ на вопрос клиента строго по файлам «Помощника ответов» — на русском и узбекском.
-  // tone — тон ответа, image — скриншот переписки (тогда clientMessage может быть пустым).
-  generateReply(knowledge: string, clientMessage: string, opts?: { tone?: ReplyTone; image?: AIImage }): Promise<GeneratedReply>;
+  // tones — тон ответа (можно несколько сразу, пусто — как в шаблонах), image — скриншот переписки (тогда clientMessage может быть пустым).
+  generateReply(knowledge: string, clientMessage: string, opts?: { tones?: ReplyTone[]; image?: AIImage }): Promise<GeneratedReply>;
 
   // «Проверь мой ответ»: черновик сотрудника по тем же файлам — ошибки и исправленный вариант.
   checkReply(knowledge: string, clientMessage: string, draft: string): Promise<CheckedReply>;

@@ -54,8 +54,11 @@ export async function POST(req: NextRequest) {
       const saved = await recordAssistantUse(user, access, { mode, input: message, draft, result }, result.verdict === "good" ? ["clean_reply"] : []);
       return NextResponse.json({ ...result, ...saved });
     }
-    const tone = isReplyTone(body.tone) ? body.tone : "default";
-    const reply = await aiProvider.generateReply(knowledge.text, message, { tone, image });
+    // Тонов можно выбрать несколько; старый вариант — одна строка tone.
+    const rawTones: unknown[] = Array.isArray(body.tones) ? body.tones : body.tone ? [body.tone] : [];
+    const tones = [...new Set(rawTones.filter(isReplyTone))].filter((t) => t !== "default");
+    const tone = tones.join(",") || "default";
+    const reply = await aiProvider.generateReply(knowledge.text, message, { tones, image });
     const result = { ...reply, uzNew: toNewAlphabet(reply.uz) };
     const input = image ? `📷 Скриншот переписки${message ? `\n${message}` : ""}` : message;
     const saved = await recordAssistantUse(user, access, { mode, input, tone, result });
