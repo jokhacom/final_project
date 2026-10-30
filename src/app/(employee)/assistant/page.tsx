@@ -1,63 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDay, LIMIT_PERIOD_LABEL, type LimitPeriod, type PremiumState } from "@/lib/premium";
+import { formatDay, LIMIT_PERIOD_LABEL, type PremiumState } from "@/lib/premium";
+import { CheckTab } from "@/components/assistant/CheckTab";
+import { CoachTab } from "@/components/assistant/CoachTab";
+import { HistoryTab } from "@/components/assistant/HistoryTab";
+import { ReplyTab } from "@/components/assistant/ReplyTab";
+import type { Achievement, ApiExtra, Limit } from "@/components/assistant/shared";
 
-type Limit = { limit: number; period: LimitPeriod; used: number; left: number } | null;
-type Reply = { found: boolean; ru: string; uz: string; uzNew: string; note?: string };
+type Access = { allowed: boolean; premium: boolean; state: PremiumState; from: string | null; until: string | null; limit: Limit };
 
-const VERSIONS: { key: "ru" | "uz" | "uzNew"; label: string }[] = [
-  { key: "ru", label: "🇷🇺 Русский" },
-  { key: "uz", label: "🇺🇿 Oʻzbekcha" },
-  { key: "uzNew", label: "🇺🇿 Yangi alifbo" },
-];
+const TABS = [
+  { id: "reply", label: "✨ Ответ клиенту" },
+  { id: "check", label: "🔍 Проверь мой ответ" },
+  { id: "coach", label: "🎯 Личный тренер" },
+  { id: "history", label: "📚 История" },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
 
-// «Помощник ответов» (премиум): сотрудник вставляет сообщение клиента — ИИ даёт готовый ответ по шаблонам компании.
+// «Помощник ответов» (премиум): ответ клиенту по шаблонам (текст или скриншот, нужный тон), проверка своего ответа,
+// личный тренер по ошибкам в тестах и история с избранным.
 export default function AssistantPage() {
-  const [access, setAccess] = useState<{ allowed: boolean; state: PremiumState; from: string | null; until: string | null; limit: Limit } | null>(null);
-  const allowed = access?.allowed ?? null;
-  const [message, setMessage] = useState("");
-  const [reply, setReply] = useState<Reply | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+  const [access, setAccess] = useState<Access | null>(null);
+  const [tab, setTab] = useState<TabId>("reply");
+  const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
 
   useEffect(() => {
     fetch("/api/assistant")
       .then((r) => r.json())
-      .then((d) => setAccess({ allowed: !!d.allowed, state: d.state ?? "off", from: d.from ?? null, until: d.until ?? null, limit: d.limit ?? null }))
-      .catch(() => setAccess({ allowed: false, state: "off", from: null, until: null, limit: null }));
+      .then((d) => setAccess({ allowed: !!d.allowed, premium: !!d.premium, state: d.state ?? "off", from: d.from ?? null, until: d.until ?? null, limit: d.limit ?? null }))
+      .catch(() => setAccess({ allowed: false, premium: false, state: "off", from: null, until: null, limit: null }));
   }, []);
 
-  async function ask() {
-    setLoading(true);
-    setError(null);
-    setReply(null);
-    const res = await fetch("/api/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) }).catch(() => null);
-    const d = await res?.json().catch(() => ({}));
-    setLoading(false);
-    // Остаток лимита приходит и с ответом, и с отказом «лимит исчерпан».
-    if (d?.limit !== undefined) setAccess((a) => (a ? { ...a, limit: d.limit } : a));
-    if (!res?.ok) return setError(d?.error ?? "Нет связи — попробуйте ещё раз");
-    setReply(d);
+  // Остаток лимита приходит и с ответом, и с отказом «лимит исчерпан»; новые достижения — показать сверху.
+  function onExtra(d: ApiExtra) {
+    if (d.limit !== undefined) setAccess((a) => (a ? { ...a, limit: d.limit ?? null } : a));
+    if (d.achievements?.length) setNewAchievements((list) => [...list, ...d.achievements!]);
   }
 
-  async function copy(key: string, text: string) {
-    await navigator.clipboard.writeText(text).catch(() => {});
-    setCopied(key);
-    setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500);
-  }
-
-  if (allowed === null) return <main className="container narrow"><div className="spinner" /></main>;
-  if (!allowed)
+  if (!access) return <main className="container narrow"><div className="spinner" /></main>;
+  if (!access.allowed)
     return (
       <main className="container narrow">
         <div className="card center stack">
           <div style={{ fontSize: 48 }}>⭐</div>
           <h1 style={{ margin: 0 }}>Помощник ответов</h1>
-          {access?.state === "soon" && access.from ? (
+          {access.state === "soon" && access.from ? (
             <p className="muted">Ваш премиум начнётся {formatDay(access.from)}. До этого дня помощник недоступен.</p>
-          ) : access?.state === "expired" && access.until ? (
+          ) : access.state === "expired" && access.until ? (
             <p className="muted">Срок премиума закончился {formatDay(access.until)}. Чтобы продлить, обратитесь к администратору.</p>
           ) : (
             <p className="muted">Это премиум-функция: ИИ составляет готовый ответ клиенту по шаблонам компании. Чтобы получить доступ, обратитесь к администратору.</p>
@@ -66,12 +56,15 @@ export default function AssistantPage() {
       </main>
     );
 
+  const noAnswersLeft = access.limit?.left === 0;
   return (
     <main className="container narrow stack">
       <div>
-        <h1 style={{ marginBottom: 4 }}>🤖 Помощник ответов</h1>
-        <p className="muted" style={{ margin: 0 }}>Вставьте сообщение клиента — ИИ составит ответ по шаблонам и правилам компании. Перед отправкой проверьте ответ.</p>
-        {(access?.until || access?.limit) && (
+        <h1 style={{ marginBottom: 4 }}>
+          🤖 Помощник ответов {access.premium && <span className="premium-badge" style={{ fontSize: 14 }}>⭐ Премиум</span>}
+        </h1>
+        <p className="muted" style={{ margin: 0 }}>Ответы по шаблонам и правилам компании. Перед отправкой клиенту проверьте ответ.</p>
+        {(access.until || access.limit) && (
           <p className="muted small" style={{ margin: "4px 0 0" }}>
             {[
               access.until && `⭐ Премиум до ${formatDay(access.until)}`,
@@ -83,48 +76,37 @@ export default function AssistantPage() {
         )}
       </div>
 
-      <div className="card stack">
-        <textarea
-          className="textarea"
-          rows={5}
-          maxLength={3000}
-          placeholder="Сообщение клиента, например: «Здравствуйте, деньги списались два раза, что делать?»"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && message.trim() && !loading) ask();
-          }}
-        />
-        <div className="row between">
-          <span className="muted small">Ctrl + Enter — получить ответ</span>
-          <button className="btn btn-primary" disabled={loading || !message.trim() || access?.limit?.left === 0} onClick={ask}>
-            {loading ? "ИИ составляет ответ…" : "✨ Получить ответ"}
+      {newAchievements.map((a) => (
+        <div key={a.id} className="alert alert-success row between">
+          <span>
+            🏆 Новое достижение: {a.icon} <strong>{a.label}</strong>
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setNewAchievements((l) => l.filter((x) => x.id !== a.id))}>
+            ✕
           </button>
         </div>
-        {error && <div className="alert alert-error">{error}</div>}
-      </div>
+      ))}
 
-      {reply && (
-        <>
-          {!reply.found && (
-            <div className="alert alert-error">
-              В шаблонах нет точного ответа на этот вопрос — ниже общий вежливый ответ. {reply.note}
-            </div>
-          )}
-          {reply.found && reply.note && <p className="muted small" style={{ margin: 0 }}>📎 {reply.note}</p>}
-          {VERSIONS.map((v) => (
-            <div key={v.key} className="card stack">
-              <div className="row between">
-                <strong>{v.label}</strong>
-                <button className="btn btn-ghost btn-sm" onClick={() => copy(v.key, reply[v.key])}>
-                  {copied === v.key ? "✅ Скопировано" : "📋 Копировать"}
-                </button>
-              </div>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{reply[v.key]}</div>
-            </div>
-          ))}
-        </>
-      )}
+      <div className="tabs" style={{ flexWrap: "wrap" }}>
+        {TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {noAnswersLeft && tab !== "history" && <div className="alert alert-error">Лимит ответов исчерпан. История и избранное доступны.</div>}
+
+      {/* Вкладки не размонтируются — введённый текст и результат сохраняются при переключении. */}
+      <div hidden={tab !== "reply"}>
+        <ReplyTab disabled={noAnswersLeft} onExtra={onExtra} />
+      </div>
+      <div hidden={tab !== "check"}>
+        <CheckTab disabled={noAnswersLeft} onExtra={onExtra} />
+      </div>
+      <div hidden={tab !== "coach"}>
+        <CoachTab disabled={noAnswersLeft} onExtra={onExtra} />
+      </div>
+      {tab === "history" && <HistoryTab onExtra={onExtra} />}
     </main>
   );
 }

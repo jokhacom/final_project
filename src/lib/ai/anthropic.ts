@@ -16,7 +16,19 @@ export const anthropicComplete: Complete = async (prompt, maxTokens, opts) => {
   const params = {
     model: ANTHROPIC_MODEL,
     max_tokens: Math.max(maxTokens * 2, 16000),
-    messages: [{ role: "user" as const, content: prompt }],
+    messages: [
+      {
+        role: "user" as const,
+        // Картинки (скриншот переписки) — перед текстом запроса.
+        content: [
+          ...(opts?.images ?? []).map((i) => ({
+            type: "image" as const,
+            source: { type: "base64" as const, media_type: i.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp", data: i.data },
+          })),
+          { type: "text" as const, text: prompt },
+        ],
+      },
+    ],
     ...(opts?.fast ? { output_config: { effort: "low" as const } } : {}),
   };
   const message: { stop_reason: string | null; content: { type: string; text?: string }[] } = SUPPORTS_FALLBACKS

@@ -1,11 +1,12 @@
-import type { AIProvider, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level } from "./provider";
+import type { AIImage, AIProvider, CheckedReply, CoachPlan, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level, ReplyTone } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
 // поэтому Claude, Gemini и OpenAI задают вопросы и проверяют ответы одинаково.
 // fast — для разбора документа и создания вопросов/игр: ИИ меньше «размышляет»,
 // отвечает быстрее и укладывается в лимит времени функции Vercel (60 с).
-export type Complete = (prompt: string, maxTokens: number, opts?: { fast?: boolean }) => Promise<string>;
+// images — картинки к запросу (скриншот переписки для «Помощника ответов»).
+export type Complete = (prompt: string, maxTokens: number, opts?: { fast?: boolean; images?: AIImage[] }) => Promise<string>;
 
 const LEVEL_LABEL: Record<Level, string> = {
   BEGINNER: "Новичок — базовые правила, простые формулировки",
@@ -136,6 +137,25 @@ function normalizeQuestions(list: GeneratedQuestion[]): GeneratedQuestion[] {
   });
 }
 
+// Файлы «Помощника ответов» в запросе к ИИ.
+const knowledgeBlock = (knowledge: string) => `Файлы компании — шаблоны, примеры ответов, правила и обучающие презентации. Опирайся ТОЛЬКО на них:
+"""
+${knowledge}
+"""`;
+
+const REPLY_RULES = `- если в файлах есть подходящий шаблон или пример ответа — бери его за основу и подстрой под сообщение клиента; соблюдай обращение, приветствие и подпись, как в примерах;
+- разделы «Правила компании» (если есть) — обязательные правила тона и оформления: ответ не должен их нарушать, а если подходящего шаблона нет — составь ответ по ним;
+- факты (сроки, суммы, условия, порядок действий, контакты) — только из файлов; ничего не придумывай и не упоминай другие компании, банки и сервисы;
+- ответ вежливый, на «вы», без канцелярита, готов к отправке: без пометок вроде «[имя]», если в шаблоне так не принято`;
+
+const TONE_RULE: Record<ReplyTone, string> = {
+  default: "как в шаблонах и примерах компании",
+  official: "официальный и сдержанный, полные формулировки, без эмоций и смайликов",
+  friendly: "тёплый и дружелюбный, живой язык, но в рамках правил компании",
+  short: "максимально коротко: 1–2 предложения, только суть",
+  angry: "клиент расстроен или злится: сначала искренне извинись и покажи, что понимаешь его, затем спокойно и конкретно объясни, что будет сделано",
+};
+
 export function createProvider(complete: Complete): AIProvider {
   return {
     async extractKnowledge(materialText) {
@@ -251,32 +271,87 @@ ${avoid.join("\n") || "—"}
       );
     },
 
-    async generateReply(knowledge, clientMessage) {
+    async generateReply(knowledge, clientMessage, opts) {
+      const tone = opts?.tone ?? "default";
+      const clientBlock = opts?.image
+        ? `Сообщение клиента — на скриншоте переписки (картинка приложена). Прочитай переписку и отвечай на ПОСЛЕДНИЕ сообщения клиента.${
+            clientMessage ? `\nПояснение сотрудника:\n"""\n${clientMessage}\n"""` : ""
+          }`
+        : `Сообщение клиента:\n"""\n${clientMessage}\n"""`;
       const prompt = `Ты — опытный сотрудник службы поддержки компании. Тебе пишет клиент, нужно составить готовый ответ, который сотрудник отправит клиенту.
-Файлы компании — шаблоны, примеры ответов и правила. Отвечай ТОЛЬКО по ним:
-"""
-${knowledge}
-"""
+${knowledgeBlock(knowledge)}
 
-Сообщение клиента:
-"""
-${clientMessage}
-"""
+${clientBlock}
 
 Как составить ответ:
-- если в файлах есть подходящий шаблон или пример ответа — бери его за основу и подстрой под сообщение клиента; соблюдай тон, обращение, приветствие и подпись, как в примерах;
-- разделы «Правила компании» (если есть) — обязательные правила тона и оформления: ответ не должен их нарушать, а если подходящего шаблона нет — составь ответ по ним;
-- факты (сроки, суммы, условия, порядок действий, контакты) — только из файлов; ничего не придумывай и не упоминай другие компании, банки и сервисы;
+${REPLY_RULES}
+- тон: ${TONE_RULE[tone]};
 - если в файлах нет ответа на вопрос клиента — found: false; ru и uz тогда — вежливый короткий ответ без выдуманных фактов (например, уточнить детали или сказать, что вопрос передан специалисту), а в note — чего не хватает в файлах;
-- ответ вежливый, на «вы», без канцелярита, готов к отправке: без пометок вроде «[имя]», если в шаблоне так не принято;
 - ru — на русском языке; uz — тот же ответ на ${UZ_ORTHOGRAPHY}; оба по смыслу одинаковые;
 - note — одно короткое предложение для сотрудника по-русски: на какой шаблон или правило опирался ответ.
 ${CONTEXT_RULE}
 Ответь строго JSON без markdown:
 {"found": true, "ru": "...", "uz": "...", "note": "..."}`;
-      const parsed = parseJson<Partial<GeneratedReply>>(await complete(prompt, 3000));
+      const parsed = parseJson<Partial<GeneratedReply>>(await complete(prompt, 3000, opts?.image ? { images: [opts.image] } : undefined));
       if (!parsed?.ru || !parsed?.uz) throw new Error("ИИ не вернул ответ");
       return { found: parsed.found !== false, ru: String(parsed.ru).trim(), uz: String(parsed.uz).trim(), note: parsed.note ? String(parsed.note) : undefined };
+    },
+
+    async checkReply(knowledge, clientMessage, draft) {
+      const prompt = `Ты — наставник сотрудника службы поддержки. Сотрудник написал ответ клиенту и просит проверить его перед отправкой.
+${knowledgeBlock(knowledge)}
+
+${clientMessage ? `Сообщение клиента:\n"""\n${clientMessage}\n"""\n\n` : ""}Ответ сотрудника (черновик):
+"""
+${draft}
+"""
+
+Проверь черновик ТОЛЬКО по правилам и шаблонам из файлов выше, а также на орфографию и грамматику (русский — по нормам литературного языка; узбекский — по правилам imlo.uz, простой апостроф вместо ʻ ошибкой не считай):
+- issues — каждое нарушение: quote — точный фрагмент из черновика, problem — что не так (коротко, по-русски), rule — какое правило из файлов нарушено (или «Орфография», «Грамматика»);
+- не придирайся к тому, чего нет в правилах; если черновик хороший — verdict: "good" и пустой issues;
+- fixed — исправленный ответ, готовый к отправке, на ТОМ ЖЕ языке, что черновик; сохрани смысл и всё верное, что написал сотрудник; факты — только из черновика и файлов;
+- comment — 1–2 предложения для сотрудника по-русски, на «вы»: что получилось хорошо и что главное исправить.
+${CONTEXT_RULE}
+Ответь строго JSON без markdown:
+{"verdict": "fix", "issues": [{"quote": "...", "problem": "...", "rule": "..."}], "fixed": "...", "comment": "..."}`;
+      const parsed = parseJson<Partial<CheckedReply>>(await complete(prompt, 3000));
+      const issues = (Array.isArray(parsed?.issues) ? parsed.issues : [])
+        .filter((i) => i && (i.problem || i.quote))
+        .map((i) => ({ quote: String(i.quote ?? ""), problem: String(i.problem ?? ""), rule: String(i.rule ?? "") }));
+      return {
+        verdict: issues.length || parsed?.verdict === "fix" ? "fix" : "good",
+        issues,
+        fixed: String(parsed?.fixed ?? draft).trim(),
+        comment: String(parsed?.comment ?? ""),
+      };
+    },
+
+    async coachPlan(mistakes, rules) {
+      const prompt = `Ты — личный тренер сотрудника службы поддержки. Вот его ошибки в тестах (вопрос, его ответ, правильный ответ, пояснение):
+"""
+${mistakes}
+"""
+
+Правила компании по темам, где он ошибается (используй ТОЛЬКО их):
+"""
+${rules || "—"}
+"""
+
+Составь короткий персональный план:
+- summary — 1–2 предложения по-русски, на «вы», дружелюбно: в чём главная трудность;
+- focus — 2–4 правила, которые стоит повторить: rule — само правило коротко, why — почему это важно для него (по его ошибкам), tip — короткий совет или пример, как запомнить;
+- exercises — 5 новых коротких заданий с вариантами ответа именно по этим правилам (не повторяй вопросы из ошибок): question, options (3–4 коротких варианта), correctIndex (с 0), explanation — одно предложение с правилом.
+Задания на том же языке, что вопросы в ошибках. Не добавляй фактов, которых нет в правилах и ошибках, и не упоминай другие компании.
+${CONTEXT_RULE}
+Ответь строго JSON без markdown:
+{"summary": "...", "focus": [{"rule": "...", "why": "...", "tip": "..."}], "exercises": [{"question": "...", "options": ["...", "..."], "correctIndex": 0, "explanation": "..."}]}`;
+      const parsed = parseJson<Partial<CoachPlan>>(await complete(prompt, 4000, { fast: true }));
+      const exercises = (Array.isArray(parsed?.exercises) ? parsed.exercises : []).filter(
+        (q) => q?.question && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < q.options.length
+      );
+      const focus = (Array.isArray(parsed?.focus) ? parsed.focus : []).filter((f) => f?.rule);
+      if (!focus.length && !exercises.length) throw new Error("ИИ не вернул план");
+      return { summary: String(parsed?.summary ?? ""), focus, exercises };
     },
 
     async gradeOpenAnswer(question, expectedKeywords, answer, materialContext) {

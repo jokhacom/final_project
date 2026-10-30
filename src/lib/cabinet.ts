@@ -39,7 +39,7 @@ export async function getCabinet(userId: string) {
     attempts,
     achievements: ACHIEVEMENTS.map((a) => {
       const got = earned.find((e) => e.achievementId === a.id);
-      return { id: a.id, label: a.label, icon: a.icon, description: a.description, earnedAt: got?.earnedAt ?? null };
+      return { id: a.id, label: a.label, icon: a.icon, description: a.description, premium: !!a.premium, earnedAt: got?.earnedAt ?? null };
     }),
     weakTopics: weak.map((w) => ({ topic: w.topic, count: w._count.topic })),
   };

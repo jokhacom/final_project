@@ -303,3 +303,34 @@ body:has(.modal-backdrop) .fab { display: none; } /* открытое окно (
 /* Без курсора: верно набранные буквы становятся светлыми, ошибочные — красными. */
 .tw-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 @media (max-width: 600px) { .tw-box { font-size: 18px; } }
+
+/* ⭐ Премиум: золотой значок, золотая тема (html[data-premium="gold"]) и золотые карточки. */
+.premium-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 900; color: #2b1d00; background: linear-gradient(135deg, #f7d774 0%, #e0a400 100%); box-shadow: 0 2px 8px rgba(224, 164, 0, 0.35); vertical-align: middle; }
+.nav a.nav-premium { color: #2b1d00 !important; background: linear-gradient(135deg, #f7d774 0%, #e0a400 100%); }
+.nav a.nav-premium.active, .nav a.nav-premium:hover { color: #2b1d00 !important; background: linear-gradient(135deg, #ffe08a 0%, #f0b400 100%); }
+.premium-card { border: 2px solid #e0a400 !important; background: linear-gradient(135deg, rgba(247, 215, 116, 0.18) 0%, rgba(224, 164, 0, 0.08) 100%), var(--surface) !important; box-shadow: 0 10px 30px rgba(224, 164, 0, 0.18); }
+.achievement.premium { border-color: #e0a400; }
+:root[data-premium="gold"] {
+  --bg-1: #fff8e6;
+  --bg-2: #fdeccb;
+  --border: rgba(184, 134, 11, 0.24);
+  --accent: #b8860b;
+  --accent-2: #e0a400;
+  --gradient: linear-gradient(135deg, #b8860b 0%, #f7d774 55%, #e0a400 100%);
+  --shadow: 0 10px 30px rgba(184, 134, 11, 0.16);
+  --chart-1: #b8860b;
+}
+:root[data-theme="dark"][data-premium="gold"] {
+  --bg-1: #1a1206;
+  --bg-2: #2c1f08;
+  --surface-strong: #2e2210;
+  --muted: #cdb88c;
+  --border: rgba(247, 215, 116, 0.16);
+  --accent: #f7d774;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --chart-1: #e0a400;
+}
+:root[data-theme="dark"][data-premium="gold"] a { color: #f7d774; }
+:root[data-premium="gold"] .table tr.me td { background: rgba(224, 164, 0, 0.14); }
+/* На золотом градиенте белый текст плохо читается — тёмно-коричневый. */
+:root[data-premium="gold"] .btn-primary, :root[data-premium="gold"] .tabs button.active, :root[data-premium="gold"] .step-num { color: #2b1d00 !important; box-shadow: 0 6px 18px rgba(224, 164, 0, 0.35); }
