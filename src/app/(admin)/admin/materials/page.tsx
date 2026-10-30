@@ -52,6 +52,29 @@ const LEVELS = [
   { id: "EXAM", label: "Экзамен" },
 ];
 
+// Сколько вопросов на тему создаёт ИИ для уровня: с вариантами и открытых. Новичку по умолчанию больше простых с вариантами.
+type Mix = { choice: string; open: string };
+const DEFAULT_MIX: Record<string, Mix> = {
+  BEGINNER: { choice: "3", open: "1" },
+  MIDDLE: { choice: "2", open: "2" },
+  PROFESSIONAL: { choice: "1", open: "3" },
+  EXAM: { choice: "2", open: "2" },
+};
+const toNum = (v: string) => Math.max(0, Math.min(30, Math.round(Number(v)) || 0));
+
+// Порции по 10 для одного запроса к ИИ, с сохранением нужного числа каждого вида.
+function mixBatches(choice: number, open: number) {
+  const out: { choiceCount: number; openCount: number }[] = [];
+  while (choice > 0 || open > 0) {
+    const c = Math.min(choice, BATCH);
+    const o = Math.min(open, BATCH - c);
+    out.push({ choiceCount: c, openCount: o });
+    choice -= c;
+    open -= o;
+  }
+  return out;
+}
+
 // Примерно 2000 символов — одна страница текста.
 const pages = (chars: number) => Math.max(1, Math.round(chars / 2000));
 
@@ -93,10 +116,17 @@ export default function MaterialsAdminPage() {
   const [autoCreate, setAutoCreate] = useState(false);
   // Поля храним строкой, чтобы цифру можно было стереть и набрать заново (иначе
   // пустое поле сразу превращалось в «1», и «2» набиралось как «12»).
-  const [perTopicText, setPerTopicText] = useState("3");
+  const [mix, setMix] = useState<Record<string, Mix>>(DEFAULT_MIX);
   const [gamesPerTopicText, setGamesPerTopicText] = useState("3");
   // 0 — этот вид не создаётся.
-  const perTopic = Math.max(0, Math.round(Number(perTopicText)) || 0);
+  const levelTotal = (level: string) => toNum(mix[level].choice) + toNum(mix[level].open);
+  // Сохраняем настройку на сервере — она общая и не теряется после перезагрузки.
+  const saveMix = (level: string, kind: keyof Mix, value: string) =>
+    fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: `gen_${kind}_${level}`, value: String(toNum(value)) }),
+    });
   const gamesPerTopic = Math.max(0, Math.round(Number(gamesPerTopicText)) || 0);
   const [language, setLanguage] = useState<"auto" | "ru" | "uz">("auto");
   const [busy, setBusy] = useState<string | null>(null);
@@ -123,6 +153,17 @@ export default function MaterialsAdminPage() {
 
   useEffect(() => {
     loadMaterials();
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        const saved = new Map<string, string>((d.settings ?? []).map((x: { key: string; value: string }) => [x.key, x.value]));
+        setMix(
+          Object.fromEntries(
+            LEVELS.map((l) => [l.id, { choice: saved.get(`gen_choice_${l.id}`) ?? DEFAULT_MIX[l.id].choice, open: saved.get(`gen_open_${l.id}`) ?? DEFAULT_MIX[l.id].open }])
+          )
+        );
+      })
+      .catch(() => {});
   }, []);
 
   // Пока идёт долгая обработка — предупреждаем, если пытаются закрыть вкладку.
@@ -181,9 +222,8 @@ export default function MaterialsAdminPage() {
   // Итоговый экзамен — отдельное задание: его вопросы создаются только по кнопке «+ Экзамен» у темы.
   async function generateAll(materialId: string) {
     const topics = await loadTopics(materialId);
-    if (perTopic === 0) return { created: 0, failed: 0, jobs: 0 };
     const jobs = topics.flatMap((t) =>
-      LEVELS.filter((l) => l.id !== "EXAM" && !t.questions.some((q) => q.level === l.id)).map((l) => ({ topic: t, level: l }))
+      LEVELS.filter((l) => l.id !== "EXAM" && levelTotal(l.id) > 0 && !t.questions.some((q) => q.level === l.id)).map((l) => ({ topic: t, level: l }))
     );
     let created = 0;
     let failed = 0;
@@ -192,8 +232,8 @@ export default function MaterialsAdminPage() {
       const { topic, level } = jobs[i];
       step({ materialId, stage: `Создаём вопросы: ${i + 1} из ${jobs.length} — «${topic.name}», ${level.label}`, done: i, total: jobs.length });
       try {
-        for (const count of batches(perTopic)) {
-          const r = await withRetry(() => post("/api/questions/generate", { topicId: topic.id, level: level.id, count, language }));
+        for (const part of mixBatches(toNum(mix[level.id].choice), toNum(mix[level.id].open))) {
+          const r = await withRetry(() => post("/api/questions/generate", { topicId: topic.id, level: level.id, ...part, language }));
           created += r.questions.length;
         }
       } catch (e) {
@@ -342,8 +382,8 @@ export default function MaterialsAdminPage() {
   const generateOne = (materialId: string, topicId: string, level: string, key: string) =>
     run(key, async () => {
       let created = 0;
-      for (const count of batches(perTopic)) {
-        const r = await post("/api/questions/generate", { topicId, level, count, language });
+      for (const part of mixBatches(toNum(mix[level].choice), toNum(mix[level].open))) {
+        const r = await post("/api/questions/generate", { topicId, level, ...part, language });
         created += r.questions.length;
       }
       setNotice(`Создано вопросов: ${created}. Проверить и поправить их можно в разделе «Вопросы».`);
@@ -418,19 +458,52 @@ export default function MaterialsAdminPage() {
               <option value="uz">🇺🇿 Oʻzbekcha (lotin)</option>
             </select>
           </label>
-          <label className="row small">
-            Вопросов на тему для каждого уровня:
-            <input
-              className="input"
-              style={{ width: 80, padding: "6px 8px" }}
-              type="number"
-              min={0}
-              value={perTopicText}
-              onChange={(e) => setPerTopicText(e.target.value)}
-              onBlur={() => setPerTopicText(String(perTopic))}
-            />
-            <span className="muted">(для большого документа с десятками тем хватит 2–3; 0 — только темы, без вопросов)</span>
-          </label>
+          <div className="small">
+            <div style={{ fontWeight: 800 }}>Вопросов на тему для каждого уровня</div>
+            <div className="muted">
+              С вариантами — сотрудник выбирает ответ; открытые — пишет сам. Новичку открытые даются простые: назвать ошибку или ответить одной фразой. 0 и 0 — уровень не
+              создаётся. Для большого документа с десятками тем хватит 2–4 на уровень.
+            </div>
+            <div className="table-wrap" style={{ marginTop: 6 }}>
+              <table className="table" style={{ width: "auto" }}>
+                <thead>
+                  <tr>
+                    <th>Уровень</th>
+                    <th>С вариантами</th>
+                    <th>Открытых</th>
+                    <th>Всего</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {LEVELS.map((l) => (
+                    <tr key={l.id}>
+                      <td>{l.label}</td>
+                      {(["choice", "open"] as const).map((kind) => (
+                        <td key={kind}>
+                          <input
+                            className="input"
+                            style={{ width: 70, padding: "6px 8px" }}
+                            type="number"
+                            min={0}
+                            max={30}
+                            aria-label={`${l.label}: ${kind === "choice" ? "с вариантами" : "открытых"}`}
+                            value={mix[l.id][kind]}
+                            onChange={(e) => setMix((m) => ({ ...m, [l.id]: { ...m[l.id], [kind]: e.target.value } }))}
+                            onBlur={(e) => {
+                              const v = String(toNum(e.target.value));
+                              setMix((m) => ({ ...m, [l.id]: { ...m[l.id], [kind]: v } }));
+                              saveMix(l.id, kind, v);
+                            }}
+                          />
+                        </td>
+                      ))}
+                      <td style={{ fontWeight: 800 }}>{levelTotal(l.id)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
           <label className="row small">
             Для «🎮 Создать игры» — элементов на тему:
             <input
@@ -558,10 +631,10 @@ export default function MaterialsAdminPage() {
                         <button
                           key={l.id}
                           className="btn btn-ghost btn-sm"
-                          disabled={!!busy || perTopic === 0}
+                          disabled={!!busy || levelTotal(l.id) === 0}
                           onClick={() => generateOne(m.id, topic.id, l.id, `topic:${topic.id}:${l.id}`)}
                         >
-                          {busy === `topic:${topic.id}:${l.id}` ? "Генерируем..." : `+ ${perTopic} ${l.label}`}
+                          {busy === `topic:${topic.id}:${l.id}` ? "Генерируем..." : `+ ${levelTotal(l.id)} ${l.label}`}
                         </button>
                       ))}
                     </div>

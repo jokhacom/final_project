@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { AI_NOT_CONFIGURED_MESSAGE, features } from "@/lib/config/features";
-import { aiProvider } from "@/lib/ai";
+import { aiProvider, isChoiceType } from "@/lib/ai";
 import { truncateForAI } from "@/lib/parsing/extractText";
 import { requireAdmin } from "@/lib/session";
 import { validateQuestion } from "@/lib/questions";
@@ -73,14 +73,18 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   try {
     // По теме — из её правил (или одного правила, если вопрос к нему привязан); иначе — по тексту документа.
     const toRule = (r: { type: any; text: string; sourceQuote: string | null }) => ({ type: r.type, text: r.text, sourceQuote: r.sourceQuote ?? undefined });
+    // Новый вопрос — того же вида: вместо вопроса с вариантами снова с вариантами, вместо открытого — открытый.
+    const mix = isChoiceType(question.type) ? { choice: 1, open: 0 } : { choice: 0, open: 1 };
     [generated] = question.topic
       ? await aiProvider.generateQuestionsForTopic(
           question.topic.name,
           (question.rule ? [question.rule] : question.topic.rules).map(toRule),
           question.level,
-          1
+          1,
+          undefined,
+          mix
         )
-      : await aiProvider.generateQuestions(truncateForAI(question.sourceMaterial!.content!), question.level, 1, question.rule?.text);
+      : await aiProvider.generateQuestions(truncateForAI(question.sourceMaterial!.content!), question.level, 1, question.rule?.text, undefined, mix);
   } catch (e) {
     return NextResponse.json({ error: "ИИ не смог создать вопрос: " + String(e instanceof Error ? e.message : e) }, { status: 502 });
   }
@@ -94,6 +98,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       options: generated.options ?? undefined,
       correctIndex: generated.correctIndex ?? null,
       expectedKeywords: generated.expectedKeywords ?? undefined,
+      modelAnswer: generated.modelAnswer?.trim() || null,
       explanation: generated.explanation ?? null,
     },
   });

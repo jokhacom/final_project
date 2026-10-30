@@ -1,4 +1,4 @@
-import type { AIImage, AIProvider, CheckedReply, CoachPlan, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level, ReplyTone } from "./provider";
+import type { AIImage, AIProvider, CheckedReply, CoachPlan, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level, QuestionType, ReplyTone } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
@@ -21,21 +21,23 @@ const LEVEL_RULES: Record<Level, string> = {
 - вопрос короткий: одно предложение, до 15 слов; без длинных вступлений и описаний ситуации;
 - проверяет ОДНО простое правило напрямую: «Как правильно…?», «Можно ли…?», «Какое слово…?»;
 - варианты ответа короткие (до 8 слов), правильный очевиден тому, кто знает правило, неверные — явно неверные;
-- примерно 3 из 4 заданий — с вариантами (MULTIPLE_CHOICE/BEST_RESPONSE); открытые — на ответ в одно предложение, FIX_MESSAGE — сообщение в 1–2 предложения с одной явной ошибкой против правила темы (её видит тот, кто знает правило, но не любой человек с улицы).`,
+- открытые задания — ОЧЕНЬ простые, ответ — одно слово, короткая фраза или одно предложение:
+  OPEN — «Как правильно сказать/написать…?», «Какое слово нельзя использовать…?»;
+  FIND_ERROR — короткое сообщение (одно предложение) с ОДНОЙ явной ошибкой; задание: «Найдите ошибку: какое слово нарушает правило? Напишите его и как правильно»;
+  FIX_MESSAGE для новичка НЕ используй.`,
   MIDDLE: `MIDDLE (средний уровень):
 - типичная рабочая ситуация в 1–2 предложениях, до 35 слов;
 - применить правило к конкретному случаю, а не просто вспомнить его;
 - варианты до 15 слов, неверные варианты правдоподобные;
-- примерно половина заданий — с вариантами, половина — открытые; FIX_MESSAGE — сообщение в 2 предложения с 1–2 ошибками.`,
+- открытые: OPEN — ответ в 1–2 предложения; FIND_ERROR — сообщение в 1–2 предложения с одной ошибкой; FIX_MESSAGE — сообщение в 1–2 предложения с 1–2 ошибками.`,
   PROFESSIONAL: `PROFESSIONAL (сложный уровень):
 - непростой кейс в 2–4 предложениях: конфликтный или эмоциональный клиент, нестандартная ситуация, сразу несколько правил
   (если в теме правил мало — сложность за счёт ситуации и тонких различий вариантов, а не числа правил);
 - нюансы тона и формулировок, варианты отличаются тонко;
-- больше открытых заданий (OPEN/FIND_ERROR/FIX_MESSAGE), чем с вариантами; FIX_MESSAGE — сообщение в 2–4 предложения с несколькими нарушениями.`,
+- открытые: FIX_MESSAGE — сообщение в 2–4 предложения с несколькими нарушениями; OPEN — как ответить в сложной ситуации.`,
   EXAM: `ИТОГОВЫЙ ЭКЗАМЕН:
 - задания смешанной сложности, от простых до сложных кейсов;
-- проверяют умение применить сразу несколько правил;
-- примерно половина — с вариантами, половина — открытые.`,
+- проверяют умение применить сразу несколько правил.`,
 };
 
 // Только загруженный документ: никаких сведений «из головы» ИИ и упоминаний других компаний.
@@ -59,22 +61,47 @@ function languageRule(language: ContentLanguage = "auto"): string {
   return `Язык: пиши на том же языке, что и правила выше. Если правила на узбекском — пиши на ${UZ_ORTHOGRAPHY}. Если на русском — по-русски.`;
 }
 
+// Какие открытые задания можно давать на уровне: новичку — только простые (без переписывания сообщения целиком).
+export const OPEN_TYPES: Record<Level, QuestionType[]> = {
+  BEGINNER: ["OPEN", "FIND_ERROR"],
+  MIDDLE: ["OPEN", "FIND_ERROR", "FIX_MESSAGE"],
+  PROFESSIONAL: ["OPEN", "FIND_ERROR", "FIX_MESSAGE"],
+  EXAM: ["OPEN", "FIND_ERROR", "FIX_MESSAGE"],
+};
+
+// Сколько заданий каких видов просить: точное число с вариантами и открытых (если задано), иначе — на усмотрение ИИ.
+export type QuestionMix = { choice: number; open: number };
+function mixRule(level: Level, count: number, mix?: QuestionMix) {
+  const open = OPEN_TYPES[level].join(", ");
+  if (!mix) return `Создай ${count} заданий; с вариантами — MULTIPLE_CHOICE/BEST_RESPONSE, открытые — только ${open}.`;
+  return `Создай РОВНО ${mix.choice + mix.open} заданий: ${mix.choice} с вариантами ответа (MULTIPLE_CHOICE или BEST_RESPONSE) и ${mix.open} открытых (только типы: ${open}).`;
+}
+
 const QUESTION_FORMAT = `Типы заданий:
 - MULTIPLE_CHOICE — вопрос и 4 варианта, один правильный;
 - BEST_RESPONSE — ситуация с клиентом и 4 варианта ответа сотрудника, выбрать лучший;
 - OPEN — открытый вопрос, сотрудник пишет ответ сам;
-- FIND_ERROR — сообщение сотрудника клиенту с ошибкой, нужно найти и назвать ошибку;
-- FIX_MESSAGE — сообщение сотрудника, нарушающее правила, нужно переписать его правильно.
-Для FIND_ERROR и FIX_MESSAGE: в text сначала коротко задание, затем само сообщение в кавычках, например: «Исправьте ответ клиенту: "…"».
+- FIND_ERROR — сообщение сотрудника клиенту с ошибкой, нужно найти и назвать ошибку (переписывать всё сообщение НЕ нужно);
+- FIX_MESSAGE — сообщение сотрудника, нарушающее правила, нужно переписать его ЦЕЛИКОМ правильно.
+Текст задания должен однозначно говорить, ЧТО написать в ответе. Используй такие формулировки (на языке задания):
+- FIND_ERROR: «Найдите ошибку в сообщении и напишите, какое слово или выражение нарушает правило и как правильно: "…"» (по-узбекски: «Xabardagi xatoni toping: qaysi soʻz qoidaga zid va qanday yozish kerak? "…"»);
+- FIX_MESSAGE: «Перепишите сообщение целиком, исправив ошибку: "…"» (по-узбекски: «Xabarni xatosiz qilib toʻliq qayta yozing: "…"»);
+- OPEN: прямой вопрос, по которому понятно, что ответить и какой длины (слово, фраза или 1–2 предложения).
+Нельзя писать просто «Исправьте ответ клиенту» — непонятно, нужно одно слово или весь текст.
 Сообщение ОБЯЗАТЕЛЬНО нарушает конкретное правило этой темы (запрещённое слово или оборот, обращение на «ты», грубый или холодный тон,
-канцелярит, неверное оформление суммы или даты, нет нужной информации и т.п.). Нельзя давать сообщение без ошибки или простую
-констатацию факта, которую нечего исправлять. В expectedKeywords — слова, которые должны быть в правильном варианте; в explanation — какое правило нарушено.
-Соотношение заданий с вариантами и открытых, длину и сложность бери из требований уровня выше.
+канцелярит, неверное оформление суммы, даты или названия продукта, нет нужной информации и т.п.). Нельзя давать сообщение без ошибки или простую
+констатацию факта, которую нечего исправлять.
+ОДИН ЯЗЫК: текст задания, сообщение в кавычках, modelAnswer и expectedKeywords — на одном языке. Если правило касается узбекского языка
+(окончания, падежи, орфография, оформление названий на узбекском) — всё задание и сообщение на узбекском. Нельзя давать сообщение на русском и ждать ответ на узбекском (и наоборот).
+У каждого открытого задания:
+- modelAnswer — образец правильного ответа: для FIX_MESSAGE — всё сообщение целиком, исправленное; для FIND_ERROR — ошибка и правильный вариант («„karta“ → „kartasi“»); для OPEN — короткий правильный ответ;
+- expectedKeywords — 1–3 слова, которые обязательно должны быть в правильном ответе (на языке ответа);
+- explanation — какое правило нарушено и почему.
 Формулируй задания как реальные ситуации из работы с клиентами, но только о том, что есть в документе, а не абстрактно.
 У каждого задания обязательно explanation — какой ответ верный и почему, со ссылкой на правило.
 Ответь строго JSON-массивом без markdown и пояснений:
 [{"type":"MULTIPLE_CHOICE","text":"...","options":["...","...","...","..."],"correctIndex":0,"explanation":"..."},
- {"type":"FIX_MESSAGE","text":"...","expectedKeywords":["...","..."],"explanation":"..."}]`;
+ {"type":"FIX_MESSAGE","text":"Перепишите сообщение целиком, исправив ошибку: \"...\"","modelAnswer":"...","expectedKeywords":["...","..."],"explanation":"..."}]`;
 
 // Модели иногда оборачивают JSON в ```json или добавляют текст вокруг.
 export function parseJson<T>(raw: string): T {
@@ -127,14 +154,17 @@ function salvageArray(text: string): unknown[] | null {
   }
 }
 
-function normalizeQuestions(list: GeneratedQuestion[]): GeneratedQuestion[] {
-  return (Array.isArray(list) ? list : []).filter((q) => {
+const isChoice = (q: GeneratedQuestion) => q.type === "MULTIPLE_CHOICE" || q.type === "BEST_RESPONSE";
+
+// Отбрасываем некорректные задания и типы, недопустимые на уровне; при заданном mix — не больше, чем просили, каждого вида.
+function normalizeQuestions(list: GeneratedQuestion[], level: Level, mix?: QuestionMix): GeneratedQuestion[] {
+  const valid = (Array.isArray(list) ? list : []).filter((q) => {
     if (!q?.text || !q.type) return false;
-    if (q.type === "MULTIPLE_CHOICE" || q.type === "BEST_RESPONSE") {
-      return Array.isArray(q.options) && q.options.length >= 2 && typeof q.correctIndex === "number";
-    }
-    return ["OPEN", "FIND_ERROR", "FIX_MESSAGE"].includes(q.type);
+    if (isChoice(q)) return Array.isArray(q.options) && q.options.length >= 2 && typeof q.correctIndex === "number";
+    return OPEN_TYPES[level].includes(q.type);
   });
+  if (!mix) return valid;
+  return [...valid.filter(isChoice).slice(0, mix.choice), ...valid.filter((q) => !isChoice(q)).slice(0, mix.open)];
 }
 
 // Файлы «Помощника ответов» в запросе к ИИ.
@@ -184,7 +214,7 @@ ${materialText}
       return parseJson(await complete(prompt, 12000, { fast: true }));
     },
 
-    async generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level, count, language) {
+    async generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level, count, language, mix) {
       const rulesText = rules
         .map((r, i) => `${i + 1}. [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`)
         .join("\n");
@@ -197,13 +227,13 @@ ${CONTEXT_RULE}
 Правила этой темы (используй ТОЛЬКО их, не придумывай новых):
 ${rulesText}
 
-Создай ${count} заданий, каждое проверяет одно из перечисленных правил.
+${mixRule(level, count, mix)} Каждое задание проверяет одно из перечисленных правил.
 ${languageRule(language)}
 ${QUESTION_FORMAT}`;
-      return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })));
+      return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })), level, mix);
     },
 
-    async generateQuestions(materialText, level, count, ruleContext, language) {
+    async generateQuestions(materialText, level, count, ruleContext, language, mix) {
       const ruleBlock = ruleContext
         ? `Создавай задание ИМЕННО по этому правилу:\n"""\n${ruleContext}\n"""\nДокумент ниже — только контекст.`
         : `Создавай задания на основе всего документа ниже.`;
@@ -219,10 +249,10 @@ ${ruleBlock}
 ${materialText}
 """
 
-Создай ${count} заданий, основанных ТОЛЬКО на содержании документа.
+${mixRule(level, count, mix)} Задания основаны ТОЛЬКО на содержании документа.
 ${languageRule(language).replace("правила выше", "документ")}
 ${QUESTION_FORMAT}`;
-      return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })));
+      return normalizeQuestions(parseJson(await complete(prompt, 8000, { fast: true })), level, mix);
     },
 
     async generateGameItems(topicName, rules, count, language) {
@@ -369,6 +399,8 @@ ${contextBlock}
 Ответ сотрудника: "${answer}"
 
 Если ответ сотрудника на узбекском — орфографические ошибки считай по правилам современной узбекской орфографии (imlo.uz, латиница); простой апостроф вместо ʻ (o', g') ошибкой не считай. Комментарий пиши на языке ответа сотрудника.
+Оценивай то, что просит задание: если просят найти ошибку — достаточно правильно назвать ошибку и исправление (переписывать всё сообщение не нужно); если просят переписать сообщение — нужен исправленный текст целиком; на открытый вопрос — достаточно сути, без лишнего.
+Если в материале есть эталонный ответ — это образец, а не единственный верный вариант: засчитывай ответ, совпадающий по смыслу.
 Оцени смысловую правильность строго по материалу (перефразированный правильный ответ засчитывается), посчитай орфографические и грамматические ошибки в ответе.
 В комментарии (2–4 предложения, обращение на «вы») объясни, ПОЧЕМУ ответ принят или нет, со ссылкой на конкретное правило, и каким должен быть правильный ответ. Если в материале нет подходящего правила — так и напиши.
 Ответь строго JSON без markdown:

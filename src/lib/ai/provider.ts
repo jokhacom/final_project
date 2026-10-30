@@ -17,6 +17,7 @@ export interface GeneratedQuestion {
   options?: string[];
   correctIndex?: number;
   expectedKeywords?: string[];
+  modelAnswer?: string; // образец правильного ответа для открытых заданий
   explanation?: string; // объяснение правильного ответа и типичных ошибок
 }
 
@@ -99,11 +100,26 @@ export interface AIProvider {
   extractKnowledge(materialText: string): Promise<ExtractedTopic[]>;
 
   // Генерация вопросов по конкретной теме и её правилам (Question → Topic).
-  generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level: Level, count: number, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
+  // mix — точно сколько с вариантами и сколько открытых (иначе count на усмотрение ИИ).
+  generateQuestionsForTopic(
+    topicName: string,
+    rules: ExtractedRule[],
+    level: Level,
+    count: number,
+    language?: ContentLanguage,
+    mix?: { choice: number; open: number }
+  ): Promise<GeneratedQuestion[]>;
 
   // Генерация по всему тексту документа — для материалов без базы знаний.
   // ruleContext — подсказка конкретного правила при перегенерации одного вопроса.
-  generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
+  generateQuestions(
+    materialText: string,
+    level: Level,
+    count: number,
+    ruleContext?: string,
+    language?: ContentLanguage,
+    mix?: { choice: number; open: number }
+  ): Promise<GeneratedQuestion[]>;
 
   // Элементы игр по правилам темы: «Можно или нельзя?» и «Найди и исправь ошибку».
   generateGameItems(topicName: string, rules: ExtractedRule[], count: number, language?: ContentLanguage): Promise<GeneratedGameItem[]>;
