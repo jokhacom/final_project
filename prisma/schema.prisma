@@ -263,6 +263,7 @@ model Presentation {
   contentType String?  // application/pdf, ...presentationml.presentation, application/vnd.ms-powerpoint
   size        Int
   order       Int      @default(0)
+  text        String?  // текст слайдов (и заметок) для «Помощника ответов»; null — ещё не читали, "" — текста нет (скан, .ppt)
   createdAt   DateTime @default(now())
 }
 

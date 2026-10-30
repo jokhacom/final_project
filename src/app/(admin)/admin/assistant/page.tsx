@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Material = { id: string; title: string; chars: number };
+// chars: null — текст ещё не прочитан, 0 — текста нет (скан или старый .ppt).
+type Pres = { id: string; title: string; fileName: string; chars: number | null };
 type Doc = { id: string; title: string; fileName: string | null; chars: number; preview: string; createdAt: string };
 
 // Файлы «Помощника ответов»: шаблоны, примеры ответов, правила. По ним ИИ составляет ответ клиенту.
@@ -13,6 +15,10 @@ export default function AdminAssistantPage() {
   const [total, setTotal] = useState({ chars: 0, max: 0 });
   const [materials, setMaterials] = useState<Material[]>([]);
   const [withMaterials, setWithMaterials] = useState(true);
+  const [presentations, setPresentations] = useState<Pres[]>([]);
+  const [withPresentations, setWithPresentations] = useState(true);
+  const [reading, setReading] = useState<string | null>(null); // id презентации, текст которой сейчас читается
+  const [failed, setFailed] = useState<Set<string>>(new Set()); // не удалось прочитать — больше не пробуем до перезагрузки страницы
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [fileKey, setFileKey] = useState(0);
@@ -29,6 +35,8 @@ export default function AdminAssistantPage() {
       setTotal({ chars: d.totalChars, max: d.maxChars });
       setMaterials(d.materials ?? []);
       setWithMaterials(d.useMaterials !== false);
+      setPresentations(d.presentations ?? []);
+      setWithPresentations(d.usePresentations !== false);
     });
 
   useEffect(() => {
@@ -60,12 +68,23 @@ export default function AdminAssistantPage() {
     load();
   }
 
-  async function toggleMaterials() {
-    const next = !withMaterials;
-    setWithMaterials(next);
-    await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "assistant_use_materials", value: String(next) }) });
+  async function toggleSetting(key: string, next: boolean) {
+    await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, value: String(next) }) });
     load();
   }
+
+  // Презентации, загруженные до этой функции, читаем по одной (каждая — отдельный запрос, чтобы уложиться во время функции Vercel).
+  useEffect(() => {
+    if (reading) return;
+    const next = presentations.find((p) => p.chars === null && !failed.has(p.id));
+    if (!next) return;
+    setReading(next.id);
+    fetch(`/api/assistant/presentations/${next.id}`, { method: "POST" })
+      // Ждём обновления списка, иначе эффект успеет снова взять эту же презентацию.
+      .then(async (r) => (r.ok ? await load() : setFailed((f) => new Set(f).add(next.id))))
+      .catch(() => setFailed((f) => new Set(f).add(next.id)))
+      .finally(() => setReading(null));
+  }, [presentations, reading, failed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) return <div className="alert alert-error">{error}</div>;
 
@@ -73,7 +92,7 @@ export default function AdminAssistantPage() {
     <div className="stack">
       <h1>🤖 Помощник ответов</h1>
       <p className="muted small" style={{ marginTop: -8 }}>
-        Загрузите шаблоны, примеры ответов и правила. Сотрудник вставляет сообщение клиента — ИИ составляет готовый ответ только по этим файлам и документам «Материалов»: на русском, на
+        Загрузите шаблоны, примеры ответов и правила. Сотрудник вставляет сообщение клиента — ИИ составляет готовый ответ только по этим файлам, документам «Материалов» и презентациям «Обучения»: на русском, на
         узбекском и на узбекском новым алфавитом. Доступ даёте вы: «Обзор» → «Сотрудники» → ⭐ Премиум. Администраторам помощник доступен всегда.{" "}
         <Link href="/assistant">Открыть помощник →</Link>
       </p>
@@ -110,7 +129,14 @@ export default function AdminAssistantPage() {
             </p>
           </div>
           <label className="row small" style={{ gap: 6, flex: "none", fontWeight: 800, cursor: "pointer" }}>
-            <input type="checkbox" checked={withMaterials} onChange={toggleMaterials} />
+            <input
+              type="checkbox"
+              checked={withMaterials}
+              onChange={() => {
+                setWithMaterials(!withMaterials);
+                toggleSetting("assistant_use_materials", !withMaterials);
+              }}
+            />
             Использовать
           </label>
         </div>
@@ -129,12 +155,58 @@ export default function AdminAssistantPage() {
       </div>
 
       <div className="card">
+        <div className="row between" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}>
+          <div>
+            <h2 style={{ margin: 0 }}>🎓 Презентации из «Обучения»</h2>
+            <p className="muted small" style={{ margin: "4px 0 0" }}>
+              Помощник читает и текст презентаций (PDF и PowerPoint .pptx — слайды и заметки). Новые презентации читаются сразу при загрузке.
+            </p>
+          </div>
+          <label className="row small" style={{ gap: 6, flex: "none", fontWeight: 800, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={withPresentations}
+              onChange={() => {
+                setWithPresentations(!withPresentations);
+                toggleSetting("assistant_use_presentations", !withPresentations);
+              }}
+            />
+            Использовать
+          </label>
+        </div>
+        {presentations.length === 0 ? (
+          <p className="muted small">
+            В «Обучении» пока нет презентаций. <Link href="/admin/learning">Загрузить →</Link>
+          </p>
+        ) : (
+          presentations.map((p) => (
+            <div key={p.id} className="row between small" style={{ padding: "8px 0", borderTop: "1px solid var(--border)", opacity: withPresentations ? 1 : 0.5 }}>
+              <span style={{ fontWeight: 800 }}>{p.title}</span>
+              <span className="muted">
+                {p.chars === null
+                  ? reading === p.id
+                    ? "читаю текст…"
+                    : failed.has(p.id)
+                      ? "не удалось прочитать — обновите страницу, чтобы попробовать ещё раз"
+                      : "ждёт чтения"
+                  : p.chars > 0
+                    ? `${p.chars.toLocaleString("ru-RU")} символов`
+                    : /\.ppt$/i.test(p.fileName)
+                      ? "старый формат .ppt не читается — сохраните как .pptx или PDF"
+                      : "текста нет (картинки или скан)"}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
         <h2>Шаблоны и примеры ответов ({docs?.length ?? 0})</h2>
         {docs && total.max > 0 && (
           <p className="muted small" style={{ marginTop: -8 }}>
-            Всего для ИИ{withMaterials && materials.length ? " (вместе с «Материалами»)" : ""}: {total.chars.toLocaleString("ru-RU")} символов из {total.max.toLocaleString("ru-RU")}. Всё отправляется ИИ с каждым вопросом, поэтому лишнее лучше
+            Всего для ИИ{(withMaterials && materials.length) || (withPresentations && presentations.length) ? " (вместе с «Материалами» и «Обучением»)" : ""}: {total.chars.toLocaleString("ru-RU")} символов из {total.max.toLocaleString("ru-RU")}. Всё отправляется ИИ с каждым вопросом, поэтому лишнее лучше
             удалять.
-            {total.chars > total.max && <strong> Лимит превышен — конец документов «Материалов» ИИ не увидит (шаблоны — всегда).</strong>}
+            {total.chars > total.max && <strong> Лимит превышен — конец документов и презентаций ИИ не увидит (шаблоны — всегда).</strong>}
           </p>
         )}
         {!docs ? (

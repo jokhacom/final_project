@@ -28,25 +28,34 @@ export async function assistantAccess(user: SessionUser) {
 export const MAX_KNOWLEDGE_CHARS = 400_000;
 export const MAX_CLIENT_MESSAGE = 3000;
 
-// Брать ли в помощник ещё и документы из «Материалов» (Редполитика и т. п.). По умолчанию — да.
+// Брать ли в помощник ещё и документы из «Материалов» (Редполитика и т. п.) и презентации из «Обучения». По умолчанию — да.
 export const USE_MATERIALS_KEY = "assistant_use_materials";
-export async function useMaterials() {
-  const s = await db.setting.findUnique({ where: { key: USE_MATERIALS_KEY } });
+export const USE_PRESENTATIONS_KEY = "assistant_use_presentations";
+async function settingOn(key: string) {
+  const s = await db.setting.findUnique({ where: { key } });
   return s?.value !== "false";
 }
+export const useMaterials = () => settingOn(USE_MATERIALS_KEY);
+export const usePresentations = () => settingOn(USE_PRESENTATIONS_KEY);
 
 // Действующие документы «Материалов» с текстом (старые версии не берём).
 export const activeMaterials = () =>
   db.material.findMany({ where: { isActive: true, content: { not: null } }, orderBy: { createdAt: "asc" }, select: { id: true, title: true, content: true } });
 
+// Презентации «Обучения» в порядке раздела; text: null — текст ещё не прочитан (загружены до появления этой функции).
+export const learningPresentations = () =>
+  db.presentation.findMany({ orderBy: [{ order: "asc" }, { createdAt: "desc" }], select: { id: true, title: true, fileName: true, text: true } });
+
 // Все файлы одним текстом, с названиями — чтобы ИИ видел, где какой шаблон.
-// Сначала шаблоны помощника, потом документы «Материалов»: если текста больше лимита, обрезаются документы, а не шаблоны.
+// Порядок: шаблоны помощника, документы «Материалов», презентации «Обучения» — при лимите обрезается конец, шаблоны остаются.
 export async function loadKnowledge() {
   const docs = await db.replyDoc.findMany({ orderBy: { createdAt: "asc" }, select: { title: true, content: true } });
   const materials = (await useMaterials()) ? await activeMaterials() : [];
+  const presentations = (await usePresentations()) ? (await learningPresentations()).filter((p) => p.text) : [];
   const parts = [
     ...docs.map((d) => `=== Шаблоны и примеры ответов: ${d.title} ===\n${d.content.trim()}`),
     ...materials.map((m) => `=== Правила компании: ${m.title} ===\n${(m.content ?? "").trim()}`),
+    ...presentations.map((p) => `=== Обучающая презентация: ${p.title} ===\n${p.text}`),
   ];
   const text = parts.join("\n\n");
   return { count: parts.length, text: text.slice(0, MAX_KNOWLEDGE_CHARS), truncated: text.length > MAX_KNOWLEDGE_CHARS };

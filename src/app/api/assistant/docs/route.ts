@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { db } from "@/lib/db";
 import { extractText } from "@/lib/parsing/extractText";
-import { activeMaterials, MAX_KNOWLEDGE_CHARS, useMaterials } from "@/lib/assistant";
+import { activeMaterials, learningPresentations, MAX_KNOWLEDGE_CHARS, useMaterials, usePresentations } from "@/lib/assistant";
 import { requireSuperadmin } from "@/lib/session";
 
 // Файлы «Помощника ответов» (только суперадминистратор). Сам файл не храним — только текст.
@@ -15,8 +15,21 @@ export async function GET() {
   // Документы «Материалов», которые помощник тоже читает (если включено).
   const withMaterials = await useMaterials();
   const materials = (await activeMaterials()).map((m) => ({ id: m.id, title: m.title, chars: m.content?.length ?? 0 }));
-  const totalChars = docs.reduce((n, d) => n + d.content.length, 0) + (withMaterials ? materials.reduce((n, m) => n + m.chars, 0) : 0);
-  return NextResponse.json({ items, materials, useMaterials: withMaterials, totalChars, maxChars: MAX_KNOWLEDGE_CHARS });
+  // Презентации «Обучения»: chars null — текст ещё не прочитан, 0 — текста нет (скан или старый .ppt).
+  const withPresentations = await usePresentations();
+  const presentations = (await learningPresentations()).map((p) => ({ id: p.id, title: p.title, fileName: p.fileName, chars: p.text === null ? null : p.text.length }));
+  const sum = (list: { chars: number | null }[]) => list.reduce((n, x) => n + (x.chars ?? 0), 0);
+  const totalChars =
+    docs.reduce((n, d) => n + d.content.length, 0) + (withMaterials ? sum(materials) : 0) + (withPresentations ? sum(presentations) : 0);
+  return NextResponse.json({
+    items,
+    materials,
+    useMaterials: withMaterials,
+    presentations,
+    usePresentations: withPresentations,
+    totalChars,
+    maxChars: MAX_KNOWLEDGE_CHARS,
+  });
 }
 
 // Добавить файл (PDF/DOCX/TXT) или вставленный текст: form-data с file или text, и title.

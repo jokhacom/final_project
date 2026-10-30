@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/session";
 import { CHUNK_BYTES, PRESENTATION_TYPES, extOf } from "@/lib/presentations";
+import { presentationTextSafe } from "@/lib/parsing/presentationText";
 
 export const maxDuration = 60;
 
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
         url: stored.url,
         contentType,
         size,
+        text: await presentationTextSafe(data, fileName), // для «Помощника ответов»
       },
       select: { id: true, title: true },
     });
