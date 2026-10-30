@@ -1,6 +1,7 @@
 // Слова для теста скорости печати: частые слова и лексика работы с клиентами.
 // Узбекский — латиница по действующим правилам (oʻ, gʻ — со знаком ʻ, tutuq belgisi — ʼ).
-// Новый алфавит — по проекту 2021 года: oʻ → ó, gʻ → ǵ, sh → ş, ch → ç (получается из узбекского списка).
+// Новый алфавит — по закону об усовершенствованном узбекском алфавите (подписан в 2026 г., действует с 22.04.2027):
+// oʻ → ö, gʻ → ğ, sh → ş, ch → ç; ng и tutuq belgisi (ʼ) не меняются. Получается из узбекского списка.
 
 export const TYPING_LANGUAGES = ["ru", "uz", "uz_new"] as const;
 export type TypingLanguage = (typeof TYPING_LANGUAGES)[number];
@@ -36,8 +37,8 @@ bajarildi tasdiqlash bekor qaytarish almashtirish choʻntak gʻoya oʻzbek tilid
 // Действующая латиница → проект нового алфавита. После o/g принимаем и ‘ ', как часто печатают вместо ʻ.
 export function toNewAlphabet(text: string) {
   return text
-    .replace(/O[ʻ‘']/g, "Ó").replace(/o[ʻ‘']/g, "ó")
-    .replace(/G[ʻ‘']/g, "Ǵ").replace(/g[ʻ‘']/g, "ǵ")
+    .replace(/O[ʻ‘']/g, "Ö").replace(/o[ʻ‘']/g, "ö")
+    .replace(/G[ʻ‘']/g, "Ğ").replace(/g[ʻ‘']/g, "ğ")
     .replace(/SH/g, "Ş").replace(/Sh/g, "Ş").replace(/sh/g, "ş")
     .replace(/CH/g, "Ç").replace(/Ch/g, "Ç").replace(/ch/g, "ç");
 }
@@ -53,7 +54,7 @@ export const TYPING_WORDS: Record<TypingLanguage, string[]> = {
 export const EXTRA_KEYS: Record<TypingLanguage, string[]> = {
   ru: [],
   uz: ["ʻ", "ʼ"],
-  uz_new: ["ó", "ǵ", "ş", "ç", "ʼ"],
+  uz_new: ["ö", "ğ", "ş", "ç", "ʼ"],
 };
 
 // Все виды апострофа считаем одним знаком: на клавиатуре обычно есть только ' .

@@ -45,7 +45,13 @@ export const TONES: { id: string; label: string }[] = [
   { id: "short", label: "✂️ Коротко" },
   { id: "angry", label: "😤 Клиент злится" },
 ];
-export const toneLabel = (id: string | null) => TONES.find((t) => t.id === id)?.label ?? "";
+// В истории тон хранится строкой «short,angry» — показываем все выбранные.
+export const toneLabel = (ids: string | null) =>
+  (ids ?? "")
+    .split(",")
+    .map((id) => TONES.find((t) => t.id === id)?.label)
+    .filter(Boolean)
+    .join(" + ");
 
 export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
