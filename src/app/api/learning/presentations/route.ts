@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin, requireUser } from "@/lib/session";
 import { PRESENTATION_TYPES } from "@/lib/presentations";
+import { presentationTextSafe } from "@/lib/parsing/presentationText";
 
 const MAX_SIZE = 4 * 1024 * 1024; // без Blob файл идёт через функцию — лимит тела запроса Vercel около 4,5 МБ
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
   const description = String(form.get("description") || "").trim().slice(0, 1000) || null;
   const last = await db.presentation.aggregate({ _max: { order: true } });
   const item = await db.presentation.create({
-    data: { title, description, fileName: file.name, data, size: data.length, contentType: PRESENTATION_TYPES.pdf, order: (last._max.order ?? 0) + 1 },
+    data: { title, description, fileName: file.name, data, size: data.length, contentType: PRESENTATION_TYPES.pdf, order: (last._max.order ?? 0) + 1, text: await presentationTextSafe(data, file.name) },
     select: { id: true, title: true },
   });
   return NextResponse.json({ item });
