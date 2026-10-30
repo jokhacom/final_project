@@ -62,6 +62,7 @@ model User {
   typingResults   TypingResult[]
   dailyQuiz       DailyQuizResult[]
   assistantUses   AssistantUse[]
+  assistantReplies AssistantReply[]
 }
 
 model Material {
@@ -319,6 +320,23 @@ model AssistantUse {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// История «Помощника ответов» у премиум-сотрудника: ответы клиенту, проверки своих ответов, планы тренера.
+// Удаление из истории не возвращает ответ в лимит (лимит считается по AssistantUse).
+model AssistantReply {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode      String   // reply — ответ клиенту, check — «Проверь мой ответ», coach — личный тренер
+  input     String   // сообщение клиента (или «скриншот переписки»)
+  draft     String?  // черновик сотрудника для проверки
+  tone      String?
+  result    Json     // ответ ИИ: { ru, uz, uzNew, note, found } / { verdict, issues, fixed, comment } / план тренера
+  favorite  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

@@ -2,7 +2,7 @@ import type { Complete } from "./prompts";
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-export const openaiComplete: Complete = async (prompt, maxTokens) => {
+export const openaiComplete: Complete = async (prompt, maxTokens, opts) => {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Не задан OPENAI_API_KEY");
 
@@ -12,7 +12,14 @@ export const openaiComplete: Complete = async (prompt, maxTokens) => {
     body: JSON.stringify({
       model: MODEL,
       max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "user",
+          content: opts?.images?.length
+            ? [...opts.images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mimeType};base64,${i.data}` } })), { type: "text", text: prompt }]
+            : prompt,
+        },
+      ],
     }),
   });
   const data = await res.json();

@@ -15,7 +15,8 @@ export const geminiComplete: Complete = async (prompt, maxTokens, opts) => {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
     body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      // Картинки (скриншот переписки) — перед текстом запроса.
+      contents: [{ role: "user", parts: [...(opts?.images ?? []).map((i) => ({ inline_data: { mime_type: i.mimeType, data: i.data } })), { text: prompt }] }],
       // «Размышления» модели входят в лимит вывода — даём запас, чтобы JSON не обрезался.
       generationConfig: {
         maxOutputTokens: Math.max(maxTokens * 2, 16384),

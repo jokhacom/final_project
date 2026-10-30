@@ -27,4 +27,5 @@ export function ThemeToggle() {
   );
 }
 
-export const themeInitScript = `(function(){try{var t=localStorage.getItem("theme");document.documentElement.dataset.theme=t==="light"?"light":"dark";}catch(e){document.documentElement.dataset.theme="dark";}})();`;
+// premiumGold — золотая тема премиума (см. lib/premiumTheme.ts); Header потом сверяет её с сервером.
+export const themeInitScript = `(function(){try{var t=localStorage.getItem("theme");document.documentElement.dataset.theme=t==="light"?"light":"dark";if(localStorage.getItem("premiumGold")==="1")document.documentElement.dataset.premium="gold";}catch(e){document.documentElement.dataset.theme="dark";}})();`;

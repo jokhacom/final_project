@@ -4,18 +4,30 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { levelInfo } from "@/lib/levels";
 import { ChangePassword } from "@/components/ChangePassword";
+import { formatDay, LIMIT_PERIOD_LABEL, type LimitPeriod, type PremiumState } from "@/lib/premium";
+import { goldThemeEnabled, setGoldThemeEnabled } from "@/lib/premiumTheme";
+
+type Access = {
+  premium: boolean;
+  state: PremiumState;
+  from: string | null;
+  until: string | null;
+  limit: { limit: number; period: LimitPeriod; used: number; left: number } | null;
+};
 
 type Cabinet = {
   user: { name: string; username: string };
   stats: { testsDone: number; avgCandy: number; bestCandy: number; place: number | null };
   attempts: { id: string; level: string; candies: number; startedAt: string }[];
-  achievements: { id: string; label: string; icon: string; description: string; earnedAt: string | null }[];
+  achievements: { id: string; label: string; icon: string; description: string; premium: boolean; earnedAt: string | null }[];
   weakTopics: { topic: string; count: number }[];
 };
 
 export default function MyCabinetPage() {
   const [data, setData] = useState<Cabinet | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [access, setAccess] = useState<Access | null>(null);
+  const [gold, setGold] = useState(true);
 
   useEffect(() => {
     fetch("/api/me")
@@ -25,6 +37,11 @@ export default function MyCabinetPage() {
         setData(d);
       })
       .catch((e) => setError(e.message));
+    fetch("/api/assistant")
+      .then((r) => r.json())
+      .then(setAccess)
+      .catch(() => {});
+    setGold(goldThemeEnabled());
   }, []);
 
   if (error) return <main className="container"><div className="alert alert-error">{error}</div></main>;
@@ -54,10 +71,63 @@ export default function MyCabinetPage() {
         ))}
       </div>
 
+      {access?.premium && (
+        <div className="card premium-card mt">
+          <div className="row between">
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 20 }}>
+                <span className="premium-badge" style={{ fontSize: 14 }}>⭐ Премиум</span>
+                {access.until ? ` до ${formatDay(access.until)}` : " · бессрочно"}
+              </div>
+              <div className="muted small" style={{ marginTop: 4 }}>
+                {access.limit
+                  ? `Осталось ответов «Помощника»: ${access.limit.left} из ${access.limit.limit} ${LIMIT_PERIOD_LABEL[access.limit.period]}`
+                  : "Ответы «Помощника» — без лимита"}
+              </div>
+            </div>
+            <Link href="/assistant" className="btn btn-primary btn-sm">
+              🤖 Открыть помощник
+            </Link>
+          </div>
+          <div className="muted small" style={{ marginTop: 10 }}>
+            Вам доступны: готовые ответы клиенту (по тексту или скриншоту, в нужном тоне), «Проверь мой ответ», личный тренер и история ответов с избранным.
+          </div>
+          <label className="row small" style={{ gap: 6, marginTop: 10, cursor: "pointer", fontWeight: 800 }}>
+            <input
+              type="checkbox"
+              checked={gold}
+              onChange={(e) => {
+                setGold(e.target.checked);
+                setGoldThemeEnabled(e.target.checked);
+              }}
+            />
+            Золотая тема сайта
+          </label>
+        </div>
+      )}
+
       <h2 className="mt-lg">Достижения</h2>
       <div className="grid grid-2">
-        {data.achievements.map((a) => (
+        {data.achievements.filter((a) => !a.premium).map((a) => (
           <div key={a.id} className={`achievement ${a.earnedAt ? "" : "locked"}`}>
+            <span className="icon">{a.icon}</span>
+            <div>
+              <div style={{ fontWeight: 800 }}>{a.label}</div>
+              <div className="muted small">
+                {a.earnedAt ? `Получено ${new Date(a.earnedAt).toLocaleDateString("ru-RU")}` : a.description}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <h2 className="mt-lg">
+        <span className="premium-badge" style={{ fontSize: 14 }}>⭐</span> Премиум-достижения
+      </h2>
+      {!access?.premium && <p className="muted small" style={{ marginTop: -8 }}>Открываются с премиум-доступом — спросите администратора.</p>}
+      <div className="grid grid-2">
+        {data.achievements.filter((a) => a.premium).map((a) => (
+          <div key={a.id} className={`achievement premium ${a.earnedAt ? "" : "locked"}`}>
             <span className="icon">{a.icon}</span>
             <div>
               <div style={{ fontWeight: 800 }}>{a.label}</div>

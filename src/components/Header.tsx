@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { ThemeToggle } from "./ThemeToggle";
+import { applyGoldTheme } from "@/lib/premiumTheme";
 
 const LINKS = [
   { href: "/levels", label: "Уровни" },
@@ -22,12 +23,26 @@ export function Header() {
   // Во время теста навигацию не показываем, чтобы случайно не уйти со страницы.
   const inTest = pathname?.startsWith("/test/");
   // «Помощник ответов» в меню — только у тех, кому он доступен (премиум и администраторы).
+  // premium — действующий премиум сотрудника: золотая ссылка и золотая тема.
   const [assistant, setAssistant] = useState(false);
+  const [premium, setPremium] = useState(false);
   const userId = (session?.user as any)?.id;
   useEffect(() => {
-    if (!userId) return setAssistant(false);
-    fetch("/api/assistant").then((r) => r.json()).then((d) => setAssistant(!!d.allowed)).catch(() => {});
-  }, [userId]);
+    if (!userId) {
+      setAssistant(false);
+      setPremium(false);
+      if (session === null) applyGoldTheme(false);
+      return;
+    }
+    fetch("/api/assistant")
+      .then((r) => r.json())
+      .then((d) => {
+        setAssistant(!!d.allowed);
+        setPremium(!!d.premium);
+        applyGoldTheme(!!d.premium);
+      })
+      .catch(() => {});
+  }, [userId, session]);
 
   return (
     <header className="header">
@@ -43,7 +58,7 @@ export function Header() {
               </Link>
             ))}
             {assistant && (
-              <Link href="/assistant" className={pathname === "/assistant" ? "active" : ""}>
+              <Link href="/assistant" className={`${pathname === "/assistant" ? "active" : ""} ${premium ? "nav-premium" : ""}`}>
                 ⭐ Помощник
               </Link>
             )}

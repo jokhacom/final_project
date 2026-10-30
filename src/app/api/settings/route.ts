@@ -29,6 +29,11 @@ export async function POST(req: NextRequest) {
     const n = Number(value);
     if (!Number.isInteger(n) || n < 0) return NextResponse.json({ error: "Пользователей — целое число, 0 — без ограничений" }, { status: 400 });
   }
+  // Сколько вопросов на тему создаёт ИИ: с вариантами (gen_choice_<УРОВЕНЬ>) и открытых (gen_open_<УРОВЕНЬ>).
+  if (/^gen_(choice|open)_(BEGINNER|MIDDLE|PROFESSIONAL|EXAM)$/.test(String(key))) {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > 30) return NextResponse.json({ error: "Вопросов на тему — целое число от 0 до 30" }, { status: 400 });
+  }
   if (String(key).startsWith("game_seconds_") && !isValidGameSeconds(Number(value))) {
     return NextResponse.json({ error: "Время в игре — целое число секунд от 3 до 3600" }, { status: 400 });
   }

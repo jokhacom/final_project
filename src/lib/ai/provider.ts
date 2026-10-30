@@ -17,6 +17,7 @@ export interface GeneratedQuestion {
   options?: string[];
   correctIndex?: number;
   expectedKeywords?: string[];
+  modelAnswer?: string; // образец правильного ответа для открытых заданий
   explanation?: string; // объяснение правильного ответа и типичных ошибок
 }
 
@@ -59,6 +60,32 @@ export interface GeneratedReply {
   note?: string; // коротко для сотрудника: на какой шаблон опирался или чего не хватает
 }
 
+// Тон ответа «Помощника»: как в шаблонах или по выбору сотрудника.
+export type ReplyTone = "default" | "official" | "friendly" | "short" | "angry";
+export const REPLY_TONES: ReplyTone[] = ["default", "official", "friendly", "short", "angry"];
+export const isReplyTone = (v: unknown): v is ReplyTone => REPLY_TONES.includes(v as ReplyTone);
+
+// Картинка для ИИ (скриншот переписки): base64 без префикса data:.
+export interface AIImage {
+  mimeType: string;
+  data: string;
+}
+
+// «Проверь мой ответ»: что не так в ответе сотрудника и исправленный вариант.
+export interface CheckedReply {
+  verdict: "good" | "fix";
+  issues: { quote: string; problem: string; rule: string }[];
+  fixed: string; // исправленный ответ на том же языке, что черновик
+  comment: string; // коротко для сотрудника, по-русски
+}
+
+// «Личный тренер»: план по слабым местам и упражнения.
+export interface CoachPlan {
+  summary: string;
+  focus: { rule: string; why: string; tip: string }[];
+  exercises: { question: string; options: string[]; correctIndex: number; explanation: string }[];
+}
+
 export interface ExtractedTopic {
   name: string;
   description?: string;
@@ -73,11 +100,26 @@ export interface AIProvider {
   extractKnowledge(materialText: string): Promise<ExtractedTopic[]>;
 
   // Генерация вопросов по конкретной теме и её правилам (Question → Topic).
-  generateQuestionsForTopic(topicName: string, rules: ExtractedRule[], level: Level, count: number, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
+  // mix — точно сколько с вариантами и сколько открытых (иначе count на усмотрение ИИ).
+  generateQuestionsForTopic(
+    topicName: string,
+    rules: ExtractedRule[],
+    level: Level,
+    count: number,
+    language?: ContentLanguage,
+    mix?: { choice: number; open: number }
+  ): Promise<GeneratedQuestion[]>;
 
   // Генерация по всему тексту документа — для материалов без базы знаний.
   // ruleContext — подсказка конкретного правила при перегенерации одного вопроса.
-  generateQuestions(materialText: string, level: Level, count: number, ruleContext?: string, language?: ContentLanguage): Promise<GeneratedQuestion[]>;
+  generateQuestions(
+    materialText: string,
+    level: Level,
+    count: number,
+    ruleContext?: string,
+    language?: ContentLanguage,
+    mix?: { choice: number; open: number }
+  ): Promise<GeneratedQuestion[]>;
 
   // Элементы игр по правилам темы: «Можно или нельзя?» и «Найди и исправь ошибку».
   generateGameItems(topicName: string, rules: ExtractedRule[], count: number, language?: ContentLanguage): Promise<GeneratedGameItem[]>;
@@ -86,7 +128,14 @@ export interface AIProvider {
   generateLanguageItems(language: "ru" | "uz", count: number, avoid: string[]): Promise<GeneratedLanguageItem[]>;
 
   // Готовый ответ на вопрос клиента строго по файлам «Помощника ответов» — на русском и узбекском.
-  generateReply(knowledge: string, clientMessage: string): Promise<GeneratedReply>;
+  // tone — тон ответа, image — скриншот переписки (тогда clientMessage может быть пустым).
+  generateReply(knowledge: string, clientMessage: string, opts?: { tone?: ReplyTone; image?: AIImage }): Promise<GeneratedReply>;
+
+  // «Проверь мой ответ»: черновик сотрудника по тем же файлам — ошибки и исправленный вариант.
+  checkReply(knowledge: string, clientMessage: string, draft: string): Promise<CheckedReply>;
+
+  // «Личный тренер»: по ошибкам сотрудника в тестах — что повторить и упражнения с вариантами.
+  coachPlan(mistakes: string, rules: string): Promise<CoachPlan>;
 
   // Проверка СТРОГО по materialContext (правило + цитата, иначе весь текст материала).
   gradeOpenAnswer(question: string, expectedKeywords: string[], answer: string, materialContext: string | null): Promise<GradeResult>;

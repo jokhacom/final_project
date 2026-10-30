@@ -27,7 +27,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Укажите уровень: BEGINNER, MIDDLE, PROFESSIONAL или EXAM" }, { status: 400 });
   }
   // Один запрос — до 10 вопросов, чтобы ответ ИИ не обрезался; больше браузер запрашивает порциями.
-  const count = Math.min(Math.max(Number(body.count) || 10, 1), 10);
+  // choiceCount / openCount — точно сколько с вариантами и сколько открытых (настройка «Материалы» → «Настройки создания»);
+  // без них — count, а соотношение выбирает ИИ по уровню.
+  const clamp = (v: unknown) => Math.min(Math.max(Math.round(Number(v)) || 0, 0), 10);
+  const mix = body.choiceCount !== undefined || body.openCount !== undefined ? { choice: clamp(body.choiceCount), open: clamp(body.openCount) } : undefined;
+  if (mix && (mix.choice + mix.open === 0 || mix.choice + mix.open > 10)) {
+    return NextResponse.json({ error: "За один запрос — от 1 до 10 вопросов" }, { status: 400 });
+  }
+  const count = mix ? mix.choice + mix.open : Math.min(Math.max(Number(body.count) || 10, 1), 10);
 
   // Материал можно не передавать — он определяется по теме или правилу.
   const topic = topicId ? await db.topic.findUnique({ where: { id: topicId }, include: { rules: true } }) : null;
@@ -56,7 +63,8 @@ export async function POST(req: NextRequest) {
         topic.rules.map((r) => ({ type: r.type, text: r.text, sourceQuote: r.sourceQuote ?? undefined })),
         level,
         count,
-        language
+        language,
+        mix
       );
     } else if (rule) {
       generated = await aiProvider.generateQuestionsForTopic(
@@ -64,10 +72,11 @@ export async function POST(req: NextRequest) {
         [{ type: rule.type, text: rule.text, sourceQuote: rule.sourceQuote ?? undefined }],
         level,
         count,
-        language
+        language,
+        mix
       );
     } else {
-      generated = await aiProvider.generateQuestions(truncateForAI(material.content!), level, count, undefined, language);
+      generated = await aiProvider.generateQuestions(truncateForAI(material.content!), level, count, undefined, language, mix);
     }
   } catch (e) {
     return NextResponse.json({ error: "ИИ не смог создать вопросы: " + String(e instanceof Error ? e.message : e) }, { status: 502 });
@@ -89,6 +98,7 @@ export async function POST(req: NextRequest) {
           options: q.options ?? undefined,
           correctIndex: q.correctIndex ?? undefined,
           expectedKeywords: q.expectedKeywords ?? undefined,
+          modelAnswer: q.modelAnswer?.trim() || undefined,
           explanation: q.explanation ?? undefined,
           sourceMaterialId: material.id,
           topicId: linkTopicId,

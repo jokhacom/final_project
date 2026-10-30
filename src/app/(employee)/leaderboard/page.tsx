@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Row = { place: number; name: string; candies: number; avg: number; tests: number; isMe: boolean };
+type Row = { place: number; name: string; candies: number; avg: number; tests: number; isMe: boolean; premium: boolean };
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -47,6 +47,11 @@ export default function LeaderboardPage() {
                     <td style={{ fontWeight: 900, fontSize: 18 }}>{MEDALS[r.place - 1] ?? r.place}</td>
                     <td style={{ fontWeight: 700 }}>
                       {r.name}
+                      {r.premium && (
+                        <span className="premium-badge" title="Премиум" style={{ marginLeft: 6 }}>
+                          ⭐
+                        </span>
+                      )}
                       {r.isMe && <span className="muted small"> (вы)</span>}
                     </td>
                     <td style={{ fontWeight: 900 }}>{r.candies} 🍬</td>

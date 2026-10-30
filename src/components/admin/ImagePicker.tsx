@@ -6,7 +6,7 @@ import { useState } from "react";
 // быстро грузился у сотрудников и помещался в лимит запроса.
 const MAX_SIDE = 1600;
 
-function compress(file: File): Promise<string> {
+export function compress(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {

@@ -23,7 +23,7 @@ export async function gradeOpenAnswerFor(questionId: string, answer: string): Pr
       question.topic.rules.map((r) => `- [${r.type}] ${r.text}${r.sourceQuote ? ` (источник: "${r.sourceQuote}")` : ""}`).join("\n")
     : question.sourceMaterial?.content ?? null;
   if (question.modelAnswer) {
-    materialContext = `[Эталонный ответ, который составил администратор]\n${question.modelAnswer}\n\n` + (materialContext ?? "");
+    materialContext = `[Образец правильного ответа (эталон)]\n${question.modelAnswer}\n\n` + (materialContext ?? "");
   }
   if (question.rule) {
     const ruleBlock = `[Конкретное правило, которое проверяет этот вопрос — тип: ${question.rule.type}]\n${question.rule.text}${question.rule.sourceQuote ? `\n(источник: "${question.rule.sourceQuote}")` : ""}\n\n`;
