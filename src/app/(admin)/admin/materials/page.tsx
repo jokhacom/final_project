@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useAdminStatus } from "@/components/admin/useAdminStatus";
 import { AiOffNotice } from "@/components/admin/AiOffNotice";
+import { DEFAULT_WORK_CONTEXT, MAX_WORK_CONTEXT, WORK_CONTEXT_KEY } from "@/lib/workContextText";
 
 type Material = {
   id: string;
@@ -117,6 +118,9 @@ export default function MaterialsAdminPage() {
   // Поля храним строкой, чтобы цифру можно было стереть и набрать заново (иначе
   // пустое поле сразу превращалось в «1», и «2» набиралось как «12»).
   const [mix, setMix] = useState<Record<string, Mix>>(DEFAULT_MIX);
+  // «Кто проходит обучение» — ИИ учитывает при создании вопросов, игр, проверке и в «Помощнике».
+  const [workContext, setWorkContext] = useState(DEFAULT_WORK_CONTEXT);
+  const [workSaved, setWorkSaved] = useState<string | null>(null);
   const [gamesPerTopicText, setGamesPerTopicText] = useState("3");
   // 0 — этот вид не создаётся.
   const levelTotal = (level: string) => toNum(mix[level].choice) + toNum(mix[level].open);
@@ -157,6 +161,7 @@ export default function MaterialsAdminPage() {
       .then((r) => r.json())
       .then((d) => {
         const saved = new Map<string, string>((d.settings ?? []).map((x: { key: string; value: string }) => [x.key, x.value]));
+        if (saved.get(WORK_CONTEXT_KEY)?.trim()) setWorkContext(saved.get(WORK_CONTEXT_KEY)!);
         setMix(
           Object.fromEntries(
             LEVELS.map((l) => [l.id, { choice: saved.get(`gen_choice_${l.id}`) ?? DEFAULT_MIX[l.id].choice, open: saved.get(`gen_open_${l.id}`) ?? DEFAULT_MIX[l.id].open }])
@@ -449,6 +454,44 @@ export default function MaterialsAdminPage() {
       {isSuper && aiOn && (
         <div className="card stack">
           <h2>⚙️ Настройки создания</h2>
+          <div className="stack" style={{ gap: 6 }}>
+            <div className="small" style={{ fontWeight: 800 }}>👥 Кто проходит обучение</div>
+            <div className="muted small">
+              ИИ учитывает это во всех вопросах, играх, проверке ответов и в «Помощнике»: задания — только о вашей работе, правила только для статей и постов
+              пропускаются.
+            </div>
+            <textarea
+              className="textarea"
+              style={{ minHeight: 120 }}
+              maxLength={MAX_WORK_CONTEXT}
+              value={workContext}
+              onChange={(e) => {
+                setWorkContext(e.target.value);
+                setWorkSaved(null);
+              }}
+            />
+            <div className="row" style={{ gap: 8 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  const value = workContext.trim() || DEFAULT_WORK_CONTEXT;
+                  const res = await fetch("/api/settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ key: WORK_CONTEXT_KEY, value }),
+                  });
+                  setWorkContext(value);
+                  setWorkSaved(res.ok ? "Сохранено" : "Не удалось сохранить");
+                }}
+              >
+                Сохранить
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setWorkContext(DEFAULT_WORK_CONTEXT); setWorkSaved(null); }}>
+                Вернуть текст по умолчанию
+              </button>
+              {workSaved && <span className="small muted">{workSaved}</span>}
+            </div>
+          </div>
           <div className="muted small" style={{ marginTop: -8 }}>Действуют для «🤖 Создать тесты», «🎮 Создать игры» и кнопок «+» у тем.</div>
           <label className="row small">
             Язык вопросов и игр:

@@ -4,6 +4,7 @@ import { geminiComplete } from "./gemini";
 import { openaiComplete } from "./openai";
 import { createProvider, type Complete } from "./prompts";
 import type { AIProvider } from "./provider";
+import { getWorkContext } from "../workContext";
 
 // Единственное место в проекте, где выбирается конкретный AI-провайдер.
 // Всё остальное приложение импортирует aiProvider отсюда и не знает деталей.
@@ -36,6 +37,6 @@ const chained: Complete = async (prompt, maxTokens, opts) => {
   throw lastError ?? new Error("ИИ не подключён");
 };
 
-export const aiProvider: AIProvider = createProvider(chained);
+export const aiProvider: AIProvider = createProvider(chained, getWorkContext);
 
 export * from "./provider";

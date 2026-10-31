@@ -82,7 +82,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ИИ не смог создать вопросы: " + String(e instanceof Error ? e.message : e) }, { status: 502 });
   }
   if (!generated.length) {
-    return NextResponse.json({ error: "ИИ не вернул ни одного корректного вопроса, попробуйте ещё раз" }, { status: 502 });
+    // Пустой ответ бывает и по делу: в теме только правила для статей и постов, к ответам клиентам они не относятся.
+    return NextResponse.json(
+      { error: "ИИ не создал вопросов: в теме нет правил для ответов клиентам (например, только правила для статей) — или попробуйте ещё раз" },
+      { status: 422 }
+    );
   }
 
   const linkTopicId = topic?.id ?? rule?.topicId;
