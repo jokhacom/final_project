@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
     const n = Number(value);
     if (!Number.isInteger(n) || n < 0) return NextResponse.json({ error: "Пользователей — целое число, 0 — без ограничений" }, { status: 400 });
   }
+  // «Кто проходит обучение» — контекст для ИИ.
+  if (key === "ai_work_context" && String(value ?? "").length > 2000) {
+    return NextResponse.json({ error: "Описание — не длиннее 2000 символов" }, { status: 400 });
+  }
   // Сколько вопросов на тему создаёт ИИ: с вариантами (gen_choice_<УРОВЕНЬ>) и открытых (gen_open_<УРОВЕНЬ>).
   if (/^gen_(choice|open)_(BEGINNER|MIDDLE|PROFESSIONAL|EXAM)$/.test(String(key))) {
     const n = Number(value);
