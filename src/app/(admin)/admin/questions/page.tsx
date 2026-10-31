@@ -21,6 +21,9 @@ type Q = {
   createdAt: string;
 };
 
+// "2026-10-27" → "27.10.2026"
+const fmtDay = (day: string) => day.split("-").reverse().join(".");
+
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -33,6 +36,9 @@ export default function QuestionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [showArchive, setShowArchive] = useState(false);
+  // Фильтр по дате создания («с» и «по» включительно, по Ташкенту) — например, найти и удалить старые вопросы.
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [archivedCount, setArchivedCount] = useState(0);
   const status = useAdminStatus([reload]);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -40,7 +46,7 @@ export default function QuestionsPage() {
   const [importResult, setImportResult] = useState<{ ok?: string; error?: string; errors?: string[] } | null>(null);
 
   async function load() {
-    const params = new URLSearchParams({ ...(level && { level }), ...(showArchive && { archived: "1" }) });
+    const params = new URLSearchParams({ ...(level && { level }), ...(showArchive && { archived: "1" }), ...(from && { from }), ...(to && { to }) });
     const res = await fetch(`/api/questions/manual?${params}`);
     const data = await res.json();
     setQuestions(data.questions ?? []);
@@ -70,7 +76,7 @@ export default function QuestionsPage() {
     setQuestions(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level, showArchive]);
+  }, [level, showArchive, from, to]);
 
   async function act(id: string, method: "DELETE" | "POST" | "ARCHIVE" | "RESTORE") {
     if (method === "DELETE" && !confirm("Удалить вопрос навсегда? Вернуть его будет нельзя, ответы сотрудников на него тоже удалятся.")) return;
@@ -108,22 +114,28 @@ export default function QuestionsPage() {
     load();
   }
 
-  // Архив: удалить навсегда все показанные вопросы.
-  async function deleteAllArchived() {
+  // Удалить навсегда все показанные вопросы (с учётом фильтров): в архиве — сразу, в тестах — с повторным подтверждением.
+  async function deleteAllShown() {
     const ids = (questions ?? []).map((q) => q.id);
-    if (!ids.length || !confirm(`Удалить навсегда все вопросы из архива (${ids.length})? Вернуть их будет нельзя, ответы сотрудников на них тоже удалятся.`)) return;
+    if (!ids.length) return;
+    const where = showArchive ? "из архива" : "из тестов";
+    const filters = [level && `уровень «${LEVEL_LABEL[level]}»`, dateLabel].filter(Boolean).join(", ");
+    if (!confirm(`Удалить навсегда все показанные вопросы ${where} (${ids.length})${filters ? ` — ${filters}` : ""}? Вернуть их будет нельзя, ответы сотрудников на них тоже удалятся.`)) return;
+    if (!showArchive && !confirm(`Точно удалить ${ids.length} вопросов, которые сейчас в тестах? Если сомневаетесь — лучше «🗄 Убрать в архив».`)) return;
     setBusy("bulk");
     setError(null);
     const res = await fetch("/api/questions/manual", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids }),
+      body: JSON.stringify({ ids, includeActive: !showArchive }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) setError(data.error ?? "Ошибка");
     load();
   }
+
+  const dateLabel = from || to ? `созданы ${from ? `с ${fmtDay(from)} ` : ""}${to ? `по ${fmtDay(to)}` : ""}`.trim() : "";
 
   const counts = (questions ?? []).reduce<Record<string, number>>((acc, q) => {
     acc[q.level] = (acc[q.level] ?? 0) + 1;
@@ -186,6 +198,37 @@ export default function QuestionsPage() {
         <p className="muted small">Вопросы в архиве не попадают в тесты, но хранятся. «↩ Вернуть» — снова в тесты.</p>
       )}
 
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span className="small" style={{ fontWeight: 800 }}>📅 Созданы:</span>
+        <label className="small">
+          с <input type="date" className="input" style={{ width: "auto", padding: "6px 10px" }} value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label className="small">
+          по <input type="date" className="input" style={{ width: "auto", padding: "6px 10px" }} value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        <button
+          className="btn btn-ghost btn-sm"
+          title="Вопросы, созданные до обновления 30.10.2026: тогда ИИ мог упоминать другие компании и давать непонятные задания"
+          onClick={() => {
+            setFrom("");
+            setTo("2026-10-30");
+          }}
+        >
+          Старые (по 30.10)
+        </button>
+        {(from || to) && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setFrom("");
+              setTo("");
+            }}
+          >
+            ✕ Сбросить даты
+          </button>
+        )}
+      </div>
+
       <div className="row">
         <select className="select" style={{ maxWidth: 240 }} value={level} onChange={(e) => setLevel(e.target.value)}>
           <option value="">Все уровни</option>
@@ -214,11 +257,9 @@ export default function QuestionsPage() {
               ? `↩ Вернуть все в тесты (${questions.length})`
               : `🗄 Убрать в архив все показанные (${questions.length})`}
           </button>
-          {showArchive && (
-            <button className="btn btn-danger btn-sm" disabled={busy === "bulk"} onClick={deleteAllArchived}>
-              🗑 Удалить все из архива ({questions.length})
-            </button>
-          )}
+          <button className="btn btn-danger btn-sm" disabled={busy === "bulk"} onClick={deleteAllShown}>
+            {showArchive ? `🗑 Удалить все из архива (${questions.length})` : `🗑 Удалить все показанные (${questions.length})`}
+          </button>
           {!showArchive && !level && <span className="muted small">Чтобы убрать только один уровень, сначала выберите его в списке.</span>}
         </div>
       )}
@@ -229,7 +270,7 @@ export default function QuestionsPage() {
         {!questions ? (
           <div className="card"><div className="spinner" /></div>
         ) : questions.length === 0 ? (
-          <div className="card muted center">{showArchive ? "Архив пуст" : "Вопросов пока нет"}</div>
+          <div className="card muted center">{dateLabel ? `Нет вопросов, которые ${dateLabel}` : showArchive ? "Архив пуст" : "Вопросов пока нет"}</div>
         ) : (
           questions.map((q) =>
             editing === q.id ? (
