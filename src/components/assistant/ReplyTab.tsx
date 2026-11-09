@@ -1,13 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { compress } from "@/components/admin/ImagePicker";
-import { callApi, FavButton, ReplyView, TONES, type ApiExtra, type ReplyResult } from "./shared";
+import { ScreenshotRedactor } from "./ScreenshotRedactor";
+import { callApi, FavButton, MaskedNote, ReplyView, TONES, type ApiExtra, type ReplyResult } from "./shared";
 
 // «Ответ клиенту»: текст сообщения и/или скриншот переписки (можно вставить Ctrl+V), выбор тона.
 export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d: ApiExtra) => void }) {
   const [message, setMessage] = useState("");
-  const [image, setImage] = useState("");
+  const [image, setImage] = useState(""); // скриншот с закрашенными личными данными — только он уходит на сервер
+  const [rawImage, setRawImage] = useState(""); // исходный скриншот, пока сотрудник закрашивает (остаётся в браузере)
+  const [shotsOn, setShotsOn] = useState(true);
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => setShotsOn(!(d.settings ?? []).some((s: { key: string; value: string }) => s.key === "assistant_screenshots" && s.value === "false")))
+      .catch(() => {});
+  }, []);
   // Тонов можно выбрать несколько; ни одного — «Как в шаблонах».
   const [tones, setTones] = useState<string[]>([]);
   const toggleTone = (id: string) =>
@@ -20,7 +29,8 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
   async function addImage(file: File | undefined | null) {
     if (!file || !file.type.startsWith("image/")) return;
     try {
-      setImage(await compress(file));
+      setImage("");
+      setRawImage(await compress(file));
     } catch {
       setError("Не удалось открыть картинку");
     }
@@ -30,14 +40,14 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
     setLoading(true);
     setError(null);
     setReply(null);
-    const { ok, data } = await callApi<ReplyResult>("/api/assistant", { mode: "reply", message, tones, image: image || undefined });
+    const { ok, data } = await callApi<ReplyResult>("/api/assistant", { mode: "reply", message, tones, image: image || undefined, imageRedacted: !!image });
     setLoading(false);
     onExtra(data);
     if (!ok) return setError(data.error ?? "Ошибка");
     setReply(data);
   }
 
-  const canAsk = !loading && !disabled && (!!message.trim() || !!image);
+  const canAsk = !loading && !disabled && !rawImage && (!!message.trim() || !!image);
   return (
     <div className="stack">
       <div className="card stack">
@@ -45,12 +55,12 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
           className="textarea"
           rows={5}
           maxLength={3000}
-          placeholder="Сообщение клиента, например: «Здравствуйте, деньги списались два раза, что делать?» — или вставьте скриншот переписки (Ctrl+V)"
+          placeholder={shotsOn ? "Сообщение клиента, например: «Здравствуйте, деньги списались два раза, что делать?» — или вставьте скриншот переписки (Ctrl+V)" : "Сообщение клиента, например: «Здравствуйте, деньги списались два раза, что делать?»"}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onPaste={(e) => {
             const file = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
-            if (file) {
+            if (file && shotsOn) {
               e.preventDefault();
               addImage(file);
             }
@@ -59,7 +69,16 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
             if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && canAsk) ask();
           }}
         />
-        {image ? (
+        {rawImage ? (
+          <ScreenshotRedactor
+            src={rawImage}
+            onDone={(url) => {
+              setImage(url);
+              setRawImage("");
+            }}
+            onCancel={() => setRawImage("")}
+          />
+        ) : image ? (
           <div className="row" style={{ gap: 10, alignItems: "flex-start", flexWrap: "nowrap" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={image} alt="Скриншот переписки" style={{ maxHeight: 160, maxWidth: "60%", borderRadius: 12, border: "1px solid var(--border)" }} />
@@ -70,12 +89,13 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
               </button>
             </div>
           </div>
-        ) : (
+        ) : shotsOn ? (
           <label className="btn btn-ghost btn-sm" style={{ alignSelf: "flex-start", cursor: "pointer" }}>
             📷 Скриншот переписки
             <input type="file" accept="image/*" hidden onChange={(e) => addImage(e.target.files?.[0])} />
           </label>
-        )}
+        ) : null}
+        <div className="muted small">🔒 ФИО, телефоны, даты рождения, паспорт / ID-карта, номера карт и счетов скрываются автоматически — ИИ их не видит.</div>
         <div className="row" style={{ gap: 6 }}>
           <span className="muted small">Тон (можно несколько):</span>
           {TONES.map((t) => (
@@ -105,6 +125,7 @@ export function ReplyTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
               <FavButton id={reply.historyId} value={false} />
             </div>
           )}
+          <MaskedNote d={reply} />
           <ReplyView reply={reply} />
         </>
       )}

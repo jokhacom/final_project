@@ -25,7 +25,15 @@ export type HistoryItem = {
 };
 
 // Ответ API помощника: результат + остаток лимита, id записи в истории и новые достижения.
-export type ApiExtra = { limit?: Limit; historyId?: string; achievements?: Achievement[]; error?: string };
+export type ApiExtra = {
+  limit?: Limit;
+  historyId?: string;
+  achievements?: Achievement[];
+  error?: string;
+  masked?: string; // что скрыли перед отправкой ИИ: «телефон, фио ×2»
+  maskedMessage?: string;
+  maskedDraft?: string;
+};
 
 export async function callApi<T>(url: string, body?: object): Promise<{ ok: boolean; data: T & ApiExtra }> {
   const res = await fetch(url, {
@@ -52,6 +60,21 @@ export const toneLabel = (ids: string | null) =>
     .map((id) => TONES.find((t) => t.id === id)?.label)
     .filter(Boolean)
     .join(" + ");
+
+// Показать сотруднику, какие личные данные клиента были скрыты и что именно увидел ИИ.
+export function MaskedNote({ d }: { d: ApiExtra }) {
+  if (!d.masked) return null;
+  return (
+    <div className="alert alert-success small" style={{ margin: 0 }}>
+      🔒 Скрыто перед отправкой ИИ: <strong>{d.masked}</strong>
+      {(d.maskedMessage || d.maskedDraft) && (
+        <div className="muted" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>
+          ИИ получил: «{[d.maskedMessage, d.maskedDraft].filter(Boolean).join(" / ")}»
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);

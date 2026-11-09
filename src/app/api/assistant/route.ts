@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { aiProvider, isReplyTone, type AIImage } from "@/lib/ai";
 import { assistantAccess, awardAchievement, guardAssistant, loadKnowledge, MAX_CLIENT_MESSAGE, recordAssistantUse } from "@/lib/assistant";
 import { toNewAlphabet } from "@/lib/typingWords";
+import { describeMasked, maskPII, type PiiKind } from "@/lib/pii";
+import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 
 export const maxDuration = 60;
@@ -30,14 +32,27 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const mode = body.mode === "check" ? "check" : "reply";
-  const message = String(body.message ?? "").trim();
-  const draft = String(body.draft ?? "").trim();
+  // Личные данные клиента (ФИО, телефон, паспорт, карта, дата рождения…) скрываем ДО ИИ и до сохранения в историю.
+  const m1 = maskPII(String(body.message ?? "").trim());
+  const m2 = maskPII(String(body.draft ?? "").trim());
+  const message = m1.text;
+  const draft = m2.text;
+  const found = { ...m1.found };
+  for (const [k, n] of Object.entries(m2.found) as [PiiKind, number][]) found[k] = (found[k] ?? 0) + n;
+  const masked = describeMasked(found);
+  const privacy = masked ? { masked, maskedMessage: message, maskedDraft: draft } : {};
   if (message.length > MAX_CLIENT_MESSAGE || draft.length > MAX_CLIENT_MESSAGE) {
     return NextResponse.json({ error: `Текст слишком длинный (больше ${MAX_CLIENT_MESSAGE} символов)` }, { status: 400 });
   }
 
   let image: AIImage | undefined;
   if (mode === "reply" && body.image) {
+    // Скриншоты: только если администратор их не выключил и сотрудник подтвердил, что закрасил личные данные клиента.
+    const off = (await db.setting.findUnique({ where: { key: "assistant_screenshots" } }))?.value === "false";
+    if (off) return NextResponse.json({ error: "Скриншоты в помощнике выключены администратором — вставьте текст сообщения" }, { status: 400 });
+    if (body.imageRedacted !== true) {
+      return NextResponse.json({ error: "Сначала закрасьте на скриншоте личные данные клиента и отметьте галочку" }, { status: 400 });
+    }
     const m = String(body.image).match(IMAGE_DATA_URL);
     if (!m || body.image.length > MAX_IMAGE_CHARS) return NextResponse.json({ error: "Скриншот не подходит: нужна картинка PNG или JPG до 3 МБ" }, { status: 400 });
     image = { mimeType: m[1], data: m[2] };
@@ -52,7 +67,7 @@ export async function POST(req: NextRequest) {
     if (mode === "check") {
       const result = await aiProvider.checkReply(knowledge.text, message, draft);
       const saved = await recordAssistantUse(user, access, { mode, input: message, draft, result }, result.verdict === "good" ? ["clean_reply"] : []);
-      return NextResponse.json({ ...result, ...saved });
+      return NextResponse.json({ ...result, ...saved, ...privacy });
     }
     // Тонов можно выбрать несколько; старый вариант — одна строка tone.
     const rawTones: unknown[] = Array.isArray(body.tones) ? body.tones : body.tone ? [body.tone] : [];
@@ -62,7 +77,7 @@ export async function POST(req: NextRequest) {
     const result = { ...reply, uzNew: toNewAlphabet(reply.uz) };
     const input = image ? `📷 Скриншот переписки${message ? `\n${message}` : ""}` : message;
     const saved = await recordAssistantUse(user, access, { mode, input, tone, result });
-    return NextResponse.json({ ...result, ...saved });
+    return NextResponse.json({ ...result, ...saved, ...privacy });
   } catch (e) {
     console.error("assistant failed:", e);
     return NextResponse.json({ error: "ИИ не смог ответить — попробуйте ещё раз" }, { status: 502 });

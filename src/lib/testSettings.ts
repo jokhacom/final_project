@@ -19,14 +19,17 @@ export const isValidQuestionCount = (n: number) => Number.isInteger(n) && n >= M
 // Настройки теста по каждому уровню: сколько вопросов, минут на тест и попыток (0 — без ограничений).
 // Ключи Setting: test_question_count_<УРОВЕНЬ>, test_duration_min_<УРОВЕНЬ>, test_attempt_limit_<УРОВЕНЬ>.
 // Если для уровня не задано — берётся прежняя общая настройка (test_question_count и т.д.), затем значение по умолчанию.
-export type LevelTestSettings = { count: number; minutes: number; attempts: number };
+// choice / open — сколько в тесте вопросов с вариантами и открытых («Админ» → «Тесты», ключи test_choice_<УРОВЕНЬ>,
+// test_open_<УРОВЕНЬ>); count = choice + open. Если не задано — прежнее «вопросов в тесте», поровну.
+export type LevelTestSettings = { count: number; choice: number; open: number; custom: boolean; minutes: number; attempts: number };
+export const isValidMixCount = (n: number) => Number.isInteger(n) && n >= 0 && n <= MAX_QUESTION_COUNT;
 export const LEVEL_SETTING_KEYS = { count: "test_question_count", minutes: "test_duration_min", attempts: "test_attempt_limit" } as const;
 export const isValidTestMinutes = (n: number) => Number.isInteger(n) && n >= MIN_TEST_MINUTES && n <= MAX_TEST_MINUTES;
 export const isValidAttemptLimit = (n: number) => Number.isInteger(n) && n >= 0;
 
 export async function getLevelSettings(): Promise<Record<LevelId, LevelTestSettings>> {
   const base = Object.values(LEVEL_SETTING_KEYS);
-  const keys = [...base, ...LEVELS.flatMap((l) => base.map((k) => `${k}_${l.id}`))];
+  const keys = [...base, ...LEVELS.flatMap((l) => [...base.map((k) => `${k}_${l.id}`), `test_choice_${l.id}`, `test_open_${l.id}`])];
   const rows = await db.setting.findMany({ where: { key: { in: keys } } });
   const read = (key: string, level: LevelId, valid: (n: number) => boolean, fallback: number) => {
     for (const k of [`${key}_${level}`, key]) {
@@ -35,11 +38,22 @@ export async function getLevelSettings(): Promise<Record<LevelId, LevelTestSetti
     }
     return fallback;
   };
+  // Своё число закрытых и открытых для уровня; иначе — прежнее общее число, поровну (с вариантами — на 1 больше при нечётном).
+  const mix = (level: LevelId) => {
+    const get = (k: string) => rows.find((r) => r.key === `${k}_${level}`)?.value;
+    const c = get("test_choice"), o = get("test_open");
+    if (c !== undefined && o !== undefined && isValidMixCount(Number(c)) && isValidMixCount(Number(o)) && Number(c) + Number(o) > 0) {
+      return { choice: Number(c), open: Number(o), custom: true };
+    }
+    const n = read(LEVEL_SETTING_KEYS.count, level, isValidQuestionCount, DEFAULT_QUESTION_COUNT);
+    return { choice: Math.ceil(n / 2), open: Math.floor(n / 2), custom: false };
+  };
   return Object.fromEntries(
     LEVELS.map((l) => [
       l.id,
       {
-        count: read(LEVEL_SETTING_KEYS.count, l.id, isValidQuestionCount, DEFAULT_QUESTION_COUNT),
+        ...mix(l.id),
+        count: mix(l.id).choice + mix(l.id).open,
         minutes: read(LEVEL_SETTING_KEYS.minutes, l.id, isValidTestMinutes, DEFAULT_TEST_MINUTES),
         attempts: read(LEVEL_SETTING_KEYS.attempts, l.id, isValidAttemptLimit, 0),
       },

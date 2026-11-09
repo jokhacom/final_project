@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/admin", label: "Обзор" },
   { href: "/admin/materials", label: "Материалы" },
   { href: "/admin/questions", label: "Вопросы" },
+  { href: "/admin/tests", label: "Тесты" },
   { href: "/admin/review", label: "Проверка" },
   { href: "/admin/learning", label: "Обучение" },
   { href: "/admin/assistant", label: "Помощник" },
