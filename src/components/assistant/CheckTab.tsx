@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { callApi, CheckView, FavButton, type ApiExtra, type CheckResult } from "./shared";
+import { callApi, CheckView, FavButton, MaskedNote, type ApiExtra, type CheckResult } from "./shared";
 
 // «Проверь мой ответ»: сотрудник пишет ответ сам — ИИ находит ошибки по правилам компании и даёт исправленный вариант.
 export function CheckTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d: ApiExtra) => void }) {
@@ -55,6 +55,7 @@ export function CheckTab({ disabled, onExtra }: { disabled: boolean; onExtra: (d
               <FavButton id={result.historyId} value={false} />
             </div>
           )}
+          <MaskedNote d={result} />
           <CheckView check={result} />
         </>
       )}

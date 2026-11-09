@@ -17,6 +17,7 @@ export default function AdminAssistantPage() {
   const [withMaterials, setWithMaterials] = useState(true);
   const [presentations, setPresentations] = useState<Pres[]>([]);
   const [withPresentations, setWithPresentations] = useState(true);
+  const [shotsOn, setShotsOn] = useState(true);
   const [reading, setReading] = useState<string | null>(null); // id презентации, текст которой сейчас читается
   const [failed, setFailed] = useState<Set<string>>(new Set()); // не удалось прочитать — больше не пробуем до перезагрузки страницы
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,10 @@ export default function AdminAssistantPage() {
 
   useEffect(() => {
     load();
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => setShotsOn(!(d.settings ?? []).some((s: { key: string; value: string }) => s.key === "assistant_screenshots" && s.value === "false")))
+      .catch(() => {});
   }, []);
 
   async function add() {
@@ -96,6 +101,25 @@ export default function AdminAssistantPage() {
         узбекском и на узбекском новым алфавитом. Доступ даёте вы: «Обзор» → «Сотрудники» → ⭐ Премиум. Администраторам помощник доступен всегда.{" "}
         <Link href="/assistant">Открыть помощник →</Link>
       </p>
+
+      <div className="card stack">
+        <h2 style={{ margin: 0 }}>🔒 Личные данные клиентов</h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          ФИО, телефоны, даты рождения, паспорт / ID-карта, ПИНФЛ, номера карт и счетов, e-mail в тексте скрываются автоматически до отправки ИИ и в истории не
+          сохраняются. На скриншоте сотрудник обязан закрасить личные данные сам — без этого скриншот не отправится.
+        </p>
+        <label className="row small" style={{ gap: 6, fontWeight: 800, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={shotsOn}
+            onChange={() => {
+              setShotsOn(!shotsOn);
+              toggleSetting("assistant_screenshots", !shotsOn);
+            }}
+          />
+          Разрешить скриншоты переписки (с обязательным закрашиванием)
+        </label>
+      </div>
 
       <div className="card stack">
         <h2 style={{ margin: 0 }}>Добавить</h2>
