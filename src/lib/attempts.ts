@@ -115,7 +115,10 @@ export async function finishAttempt(attemptId: string) {
   if (attempt.finishedAt) return { newAchievements: [] as { id: string; label: string; icon: string }[] };
 
   const answered = new Set(attempt.answers.map((a) => a.questionId));
-  const missing = attemptQuestionIds(attempt).filter((id) => !answered.has(id));
+  // Вопросы, удалённые администратором после начала теста, пропускаем: на них нельзя записать ответ.
+  const ids = attemptQuestionIds(attempt).filter((id) => !answered.has(id));
+  const stillThere = new Set((await db.question.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((q) => q.id));
+  const missing = ids.filter((id) => stillThere.has(id));
   if (missing.length) {
     await db.answer.createMany({
       data: missing.map((questionId) => ({

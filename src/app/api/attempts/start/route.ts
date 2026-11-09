@@ -43,6 +43,12 @@ export async function POST(req: NextRequest) {
   // (время не останавливалось, ответы сохранены); если вышло — завершаем его, как при таймере.
   const unfinished = await db.testAttempt.findMany({ where: { userId: user.id, level, finishedAt: null }, orderBy: { startedAt: "desc" } });
   for (const a of unfinished) {
+    // Все вопросы этой попытки администратор уже удалил — проходить нечего: убираем её (в лимит не считается).
+    const ids = attemptQuestionIds(a);
+    if (ids.length && !(await db.question.count({ where: { id: { in: ids } } }))) {
+      await db.$transaction([db.answer.deleteMany({ where: { attemptId: a.id } }), db.testAttempt.delete({ where: { id: a.id } })]);
+      continue;
+    }
     if (isRunning(a)) return NextResponse.json(await attemptPayload(a));
     await finishAttempt(a.id);
   }

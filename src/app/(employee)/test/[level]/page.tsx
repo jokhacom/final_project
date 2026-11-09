@@ -59,10 +59,11 @@ export default function TestPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ level }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(data.error ?? "Не удалось начать тест");
+      }).catch(() => null);
+      const data = (await res?.json().catch(() => ({}))) ?? {};
+      if (!res?.ok) {
+        // Без текста ошибки — сбой сервера или связи: показываем код, чтобы по скриншоту было понятно, что случилось.
+        setError(data.error ?? (res ? `Не удалось начать тест (ошибка сервера ${res.status}). Попробуйте ещё раз или сообщите администратору.` : "Нет связи с сайтом — проверьте интернет и попробуйте ещё раз."));
         setPhase("error");
         return;
       }
