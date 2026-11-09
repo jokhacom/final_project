@@ -24,12 +24,24 @@ export async function levelReadiness() {
 
   const levels = BASE_LEVELS.map((level) => {
     const n = settings[level].count;
-    const half = Math.floor(n / 2);
     const mine = rows.filter((r) => r.level === level);
     const choice = mine.filter((r) => isChoiceType(r.type)).reduce((s, r) => s + r._count._all, 0);
     const open = mine.filter((r) => !isChoiceType(r.type)).reduce((s, r) => s + r._count._all, 0);
     const total = choice + open;
-    return { id: level, choice, open, total, ready: total > 0, full: total >= n, inTest: Math.min(total, n), balanced: choice >= half && open >= half, needed: n };
+    const want = { choice: settings[level].choice, open: settings[level].open };
+    return {
+      id: level,
+      choice,
+      open,
+      total,
+      ready: total > 0,
+      full: total >= n,
+      inTest: Math.min(total, n),
+      balanced: choice >= want.choice && open >= want.open,
+      needed: n,
+      wantChoice: want.choice,
+      wantOpen: want.open,
+    };
   });
 
   return levels;

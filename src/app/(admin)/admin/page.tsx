@@ -115,7 +115,6 @@ export default function AdminHome() {
     setMinutesSaved(null);
     for (const [key, value] of [
       ...LEVELS.flatMap((l) => [
-        [`test_question_count_${l.id}`, levelCfg[l.id].count.trim()],
         [`test_duration_min_${l.id}`, levelCfg[l.id].minutes.trim()],
         [`test_attempt_limit_${l.id}`, levelCfg[l.id].attempts.trim() || "0"],
         [`open_question_min_${l.id}`, levelCfg[l.id].open.trim()],
@@ -440,9 +439,9 @@ export default function AdminHome() {
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 800 }}>Тесты по уровням</div>
             <div className="muted small">
-              Для каждого уровня отдельно: сколько вопросов в тесте, сколько минут на весь тест, сколько раз сотрудник может его пройти (0 — без
-              ограничений; администраторов лимит не касается) и сколько минут на один открытый вопрос (можно дробно: 1.5). Вопросы делятся пополам:
-              с вариантами и открытые. Уже начатые попытки не меняются.
+              Для каждого уровня отдельно: сколько минут на весь тест, сколько раз сотрудник может его пройти (0 — без ограничений; администраторов
+              лимит не касается) и сколько минут на один открытый вопрос (можно дробно: 1.5). Сколько вопросов и сколько из них закрытых и открытых —
+              во вкладке <Link href="/admin/tests">«Тесты»</Link>. Уже начатые попытки не меняются.
             </div>
             {minutesSaved && <div className="small" style={{ marginTop: 4 }}>{minutesSaved}</div>}
             <div className="table-wrap mt">
@@ -450,7 +449,6 @@ export default function AdminHome() {
                 <thead>
                   <tr>
                     <th>Уровень</th>
-                    <th>Вопросов</th>
                     <th>Минут на тест</th>
                     <th>Попыток</th>
                     <th>Минут на открытый вопрос ✍️</th>
@@ -464,7 +462,6 @@ export default function AdminHome() {
                       </td>
                       {(
                         [
-                          ["count", "numeric", /\D/g],
                           ["minutes", "numeric", /\D/g],
                           ["attempts", "numeric", /\D/g],
                           ["open", "decimal", /[^\d.,]/g],

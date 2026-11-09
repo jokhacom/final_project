@@ -18,11 +18,17 @@ function sample<T>(arr: T[], n: number): T[] {
 
 type Q = { id: string; type: string; level: string };
 
-// Берём `choice` вопросов с вариантами и `open` — со свободным ответом.
+// Сначала вопросы, которые сотрудник видел реже всего (новые — первыми), среди равных — случайно.
+// Так при повторном прохождении вопросы меняются, а у разных сотрудников — разные комбинации.
+function freshFirst(pool: Q[], seen: Map<string, number>): Q[] {
+  return sample(pool, Infinity).sort((a, b) => (seen.get(a.id) ?? 0) - (seen.get(b.id) ?? 0));
+}
+
+// Берём `choice` вопросов с вариантами и `open` — со свободным ответом (настройка «Админ» → «Тесты»).
 // Если одного вида не хватает, добираем другим, чтобы тест всё равно состоялся.
-function pick(pool: Q[], choice: number, open: number): Q[] {
-  const choicePool = sample(pool.filter((q) => isChoiceType(q.type)), Infinity);
-  const openPool = sample(pool.filter((q) => !isChoiceType(q.type)), Infinity);
+function pick(pool: Q[], choice: number, open: number, seen: Map<string, number>): Q[] {
+  const choicePool = freshFirst(pool.filter((q) => isChoiceType(q.type)), seen);
+  const openPool = freshFirst(pool.filter((q) => !isChoiceType(q.type)), seen);
   const a = choicePool.slice(0, choice);
   const b = openPool.slice(0, open);
   const rest = [...choicePool.slice(choice), ...openPool.slice(open)];
@@ -64,11 +70,15 @@ export async function POST(req: NextRequest) {
   const select = { id: true, type: true, level: true };
 
   const settings = (await getLevelSettings())[level];
-  const n = settings.count;
   // Каждый уровень, включая итоговый экзамен, — только свои вопросы.
   // Экзамен — отдельное задание: администратор сам добавляет для него вопросы.
   const pool = await db.question.findMany({ where: { level, ...activeOnly }, select });
-  const picked = pick(pool, Math.ceil(n / 2), Math.floor(n / 2));
+  // Сколько раз сотрудник уже получал каждый вопрос этого уровня (по выданным попыткам).
+  const seen = new Map<string, number>();
+  for (const a of await db.testAttempt.findMany({ where: { userId: user.id, level }, select: { questionIds: true } })) {
+    for (const id of attemptQuestionIds(a)) seen.set(id, (seen.get(id) ?? 0) + 1);
+  }
+  const picked = pick(pool, settings.choice, settings.open, seen);
 
   // В тесте — сколько есть, но не больше настройки «вопросов в тесте».
   if (picked.length === 0) {

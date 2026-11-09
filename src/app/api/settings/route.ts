@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireSuperadmin } from "@/lib/session";
-import { isValidAttemptLimit, isValidGameSeconds, isValidOpenMinutes, isValidQuestionCount, isValidTestMinutes, MAX_QUESTION_COUNT } from "@/lib/testSettings";
+import { isValidAttemptLimit, isValidGameSeconds, isValidMixCount, isValidOpenMinutes, isValidQuestionCount, isValidTestMinutes, MAX_QUESTION_COUNT } from "@/lib/testSettings";
 
 // Раздел 23: изменения дизайна/текстов/правил без кода.
 // Примеры ключей: "daily_quiz_enabled", "theme_accent_color", "welcome_text".
@@ -18,6 +18,10 @@ export async function POST(req: NextRequest) {
   const base = String(key).replace(/_(BEGINNER|MIDDLE|PROFESSIONAL|EXAM)$/, "");
   if (base === "test_duration_min" && !isValidTestMinutes(Number(value))) {
     return NextResponse.json({ error: "Время теста — целое число минут, не меньше 1" }, { status: 400 });
+  }
+  // Состав теста: закрытых и открытых для уровня («Админ» → «Тесты»).
+  if (/^test_(choice|open)_(BEGINNER|MIDDLE|PROFESSIONAL|EXAM)$/.test(String(key)) && !isValidMixCount(Number(value))) {
+    return NextResponse.json({ error: `Вопросов — целое число от 0 до ${MAX_QUESTION_COUNT}` }, { status: 400 });
   }
   if (base === "test_question_count" && !isValidQuestionCount(Number(value))) {
     return NextResponse.json({ error: `Вопросов в тесте — целое число от 1 до ${MAX_QUESTION_COUNT}` }, { status: 400 });
