@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { SUPERADMIN_USERNAME } from "@/lib/auth";
+import { validateNewUser } from "@/lib/users";
 import { getUserLimit } from "@/lib/testSettings";
 
 // Раздел 1 запроса: каждый сотрудник входит только по логину и паролю,
@@ -12,18 +12,8 @@ export async function POST(req: NextRequest) {
   try {
     const { name, username, password } = await req.json();
 
-    if (!name?.trim() || !username?.trim() || !password) {
-      return NextResponse.json({ error: "Заполните имя, логин и пароль" }, { status: 400 });
-    }
-    if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username.trim())) {
-      return NextResponse.json({ error: "Логин: 3–32 символа, латинские буквы, цифры, точка, дефис или подчёркивание" }, { status: 400 });
-    }
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Пароль должен быть не короче 6 символов" }, { status: 400 });
-    }
-    if (username.trim().toLowerCase() === SUPERADMIN_USERNAME.toLowerCase()) {
-      return NextResponse.json({ error: "Этот логин зарезервирован" }, { status: 400 });
-    }
+    const invalid = validateNewUser(name, username, password);
+    if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
 
     // Лимит пользователей сайта задаёт суперадминистратор на «Обзоре».
     const limit = await getUserLimit();

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { USERNAME_RE } from "@/lib/usernameRule";
 
 // Вход только по логину и паролю; регистрация сотрудника — на этой же странице.
 export default function AuthPage() {
@@ -68,7 +69,18 @@ export default function AuthPage() {
         {mode === "register" && (
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Имя и фамилия" autoComplete="name" />
         )}
-        <input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Логин" autoComplete="username" />
+        <input
+          className="input"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder={mode === "register" ? "Логин латиницей, например nigora.k" : "Логин"}
+          autoComplete="username"
+        />
+        {mode === "register" && username.trim() && !USERNAME_RE.test(username.trim()) && (
+          <div className="small" style={{ color: "var(--danger)", marginTop: -4 }}>
+            {username.includes("@") ? "Логин — это не почта: без @. " : ""}Только латинские буквы, цифры, точка, дефис или _ (3–32 символа).
+          </div>
+        )}
         <input
           className="input"
           type="password"
