@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { LEVELS, OPEN_QUESTION_SECONDS, levelInfo, type LevelId } from "@/lib/levels";
 import { useAdminStatus } from "@/components/admin/useAdminStatus";
+import { AddUserForm } from "@/components/admin/AddUserForm";
 import { addMonths, formatDay, LIMIT_PERIOD_LABEL, premiumState, tashkentToday, type LimitPeriod } from "@/lib/premium";
 
 type User = { id: string; name: string; username: string; role: string; premium: boolean; premiumFrom: string | null; premiumUntil: string | null; premiumLimit: number | null; premiumLimitPeriod: LimitPeriod; premiumUsed: number | null; leaderboard: { testsDone: number; bestCandy: number } | null };
@@ -226,7 +227,14 @@ export default function AdminHome() {
       </div>
 
       <div className="card">
-        <h2>👥 Сотрудники ({users.length})</h2>
+        <div className="row between" style={{ alignItems: "flex-start" }}>
+          <h2 style={{ margin: 0 }}>👥 Сотрудники ({users.length})</h2>
+        </div>
+        {isSuper && (
+          <div style={{ margin: "12px 0" }}>
+            <AddUserForm onCreated={loadUsers} />
+          </div>
+        )}
         {isSuper && (
           <p className="muted small">Администратор видит админ-панель: вопросы, аналитику, выгрузку и обратную связь. Материалы и настройки — только у вас.</p>
         )}
