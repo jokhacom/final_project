@@ -76,6 +76,20 @@ const CONTEXT_RULE = `Контекст: компания и её клиенты 
 // Правила узбекской орфографии (латиница), как в орфографическом словаре imlo.uz.
 const UZ_ORTHOGRAPHY = `узбекском языке латиницей строго по действующим правилам узбекской орфографии (как в орфографическом словаре imlo.uz): буквы oʻ и gʻ пиши со знаком ʻ (например: koʻp, togʻri), разделительный знак — ʼ (tutuq belgisi: maʼlumot, taʼlim, sanʼat), сочетания sh, ch, ng; не смешивай с кириллицей, не вставляй русские слова, если есть узбекские; следи за x/h и q/k (xizmat, hisob, qarz, kerak)`;
 
+// Узбекский ответ клиенту: не перевод с русского, а живой язык оператора банка (калькой выходит неестественно).
+const UZ_REPLY_STYLE = `пиши uz сразу по-узбекски, как опытный оператор узбекского банка пишет клиенту, — НЕ переводи русский ответ дословно, передавай смысл естественными узбекскими фразами;
+  обращение на «Siz», вежливо и просто; если в файлах есть узбекские шаблоны — бери формулировки оттуда;
+  устойчивые фразы: «Murojaatingiz uchun rahmat», «Fikringiz uchun rahmat», «Noqulaylik uchun uzr soʻraymiz», «Vaziyatingizni oʻrganib chiqamiz», «Iltimos, … yozing / murojaat qiling», «Savollaringiz boʻlsa, biz doim aloqadamiz»;
+  слова: aloqa markazi (не «kontakt-markaz»), mobil ilova, karta, hisob raqami, toʻlov, ariza, kredit limiti, mutaxassis, qoʻllab-quvvatlash xizmati;
+  избегай калек вроде «sizni norozi qilganimizdan xafa boʻldik», «muammoni birgalikda hal qilishimiz uchun» — так по-узбекски не пишут`;
+
+// ИИ часто ставит ‘ ' ’ вместо oʻ/gʻ — приводим к правильному знаку ʻ, а апостроф между буквами — к ʼ (tutuq belgisi).
+export function fixUzbekMarks(text: string) {
+  return text
+    .replace(/([OoGg])[‘'’`ʼ]/g, "$1ʻ")
+    .replace(/([A-Za-z])[‘'’`](?=[A-Za-z])/g, "$1ʼ");
+}
+
 function languageRule(language: ContentLanguage = "auto"): string {
   if (language === "ru") return "Язык: пиши всё (текст, варианты, ключевые слова, пояснения) на русском языке, даже если правила на другом языке.";
   if (language === "uz") return `Язык: пиши всё (текст, варианты, ключевые слова, пояснения) на ${UZ_ORTHOGRAPHY}, даже если правила на русском.`;
@@ -383,14 +397,15 @@ ${REPLY_RULES}
 - ${PII_RULE}
 - тон: ${toneText};
 - если в файлах нет ответа на вопрос клиента — found: false; ru и uz тогда — вежливый короткий ответ без выдуманных фактов (например, уточнить детали или сказать, что вопрос передан специалисту), а в note — чего не хватает в файлах;
-- ru — на русском языке; uz — тот же ответ на ${UZ_ORTHOGRAPHY}; оба по смыслу одинаковые;
+- ru — на русском языке; uz — тот же по смыслу ответ на ${UZ_ORTHOGRAPHY};
+- ${UZ_REPLY_STYLE};
 - note — одно короткое предложение для сотрудника по-русски: на какой шаблон или правило опирался ответ.
 ${CONTEXT_RULE}
 Ответь строго JSON без markdown:
 {"found": true, "ru": "...", "uz": "...", "note": "..."}`;
       const parsed = parseJson<Partial<GeneratedReply>>(await complete(prompt, 3000, opts?.image ? { images: [opts.image] } : undefined));
       if (!parsed?.ru || !parsed?.uz) throw new Error("ИИ не вернул ответ");
-      return { found: parsed.found !== false, ru: String(parsed.ru).trim(), uz: String(parsed.uz).trim(), note: parsed.note ? String(parsed.note) : undefined };
+      return { found: parsed.found !== false, ru: String(parsed.ru).trim(), uz: fixUzbekMarks(String(parsed.uz).trim()), note: parsed.note ? String(parsed.note) : undefined };
     },
 
     async checkReply(knowledge, clientMessage, draft) {
