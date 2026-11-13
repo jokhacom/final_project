@@ -6,7 +6,12 @@ import type { AIImage, AIProvider, CheckedReply, CoachPlan, ContentLanguage, Ext
 // fast — для разбора документа и создания вопросов/игр: ИИ меньше «размышляет»,
 // отвечает быстрее и укладывается в лимит времени функции Vercel (60 с).
 // images — картинки к запросу (скриншот переписки для «Помощника ответов»).
-export type Complete = (prompt: string, maxTokens: number, opts?: { fast?: boolean; images?: AIImage[] }) => Promise<string>;
+// check — проверка ответа: если бросила ошибку (например, ИИ вернул битый JSON), запрос уходит следующему провайдеру.
+export type Complete = (
+  prompt: string,
+  maxTokens: number,
+  opts?: { fast?: boolean; images?: AIImage[]; check?: (text: string) => void },
+) => Promise<string>;
 
 const LEVEL_LABEL: Record<Level, string> = {
   BEGINNER: "Новичок — базовые правила, простые формулировки",
@@ -403,8 +408,13 @@ ${REPLY_RULES}
 ${CONTEXT_RULE}
 Ответь строго JSON без markdown:
 {"found": true, "ru": "...", "uz": "...", "note": "..."}`;
-      const parsed = parseJson<Partial<GeneratedReply>>(await complete(prompt, 3000, opts?.image ? { images: [opts.image] } : undefined));
-      if (!parsed?.ru || !parsed?.uz) throw new Error("ИИ не вернул ответ");
+      // Короткий ответ — без долгих «размышлений» (быстрее). Битый или пустой JSON — повтор у запасного ИИ.
+      const check = (text: string) => {
+        const p = parseJson<Partial<GeneratedReply>>(text);
+        if (!p?.ru || !p?.uz) throw new Error("ИИ не вернул ответ");
+      };
+      const raw = await complete(prompt, 3000, { fast: true, check, ...(opts?.image ? { images: [opts.image] } : {}) });
+      const parsed = parseJson<Partial<GeneratedReply>>(raw);
       return { found: parsed.found !== false, ru: String(parsed.ru).trim(), uz: fixUzbekMarks(String(parsed.uz).trim()), note: parsed.note ? String(parsed.note) : undefined };
     },
 

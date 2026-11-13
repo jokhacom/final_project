@@ -27,12 +27,20 @@ const chained: Complete = async (prompt, maxTokens, opts) => {
 
   for (const p of order) {
     try {
-      return await COMPLETE[p](prompt, maxTokens, opts);
+      const text = await COMPLETE[p](prompt, maxTokens, opts);
+      opts?.check?.(text);
+      return text;
     } catch (e) {
       lastError = e;
       if ((e as { status?: number }).status === 429) coolingUntil[p] = Date.now() + COOLDOWN_MS;
       console.error(`AI provider ${PROVIDER_LABEL[p]} failed, trying next:`, e);
     }
+  }
+  // Если упали все — повторяем последнюю ошибку; при одной модели в цепочке пробуем её ещё раз (бывает разовый сбой).
+  if (order.length === 1 && lastError && (lastError as { status?: number }).status !== 429) {
+    const text = await COMPLETE[order[0]](prompt, maxTokens, opts);
+    opts?.check?.(text);
+    return text;
   }
   throw lastError ?? new Error("ИИ не подключён");
 };
