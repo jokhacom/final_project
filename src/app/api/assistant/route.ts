@@ -8,6 +8,19 @@ import { requireUser } from "@/lib/session";
 
 export const maxDuration = 60;
 
+// Понятная причина сбоя ИИ для сотрудника и админа (без ключей и технических подробностей).
+function aiErrorReason(e: unknown): string {
+  const status = (e as { status?: number }).status;
+  const msg = e instanceof Error ? e.message : String(e);
+  if (status === 429 || /quota|rate|limit/i.test(msg)) return "исчерпан лимит запросов к ИИ";
+  if (status === 401 || status === 403 || /api[_ ]?key|authentication|permission/i.test(msg)) return "неверный ключ ИИ — проверьте настройки";
+  if (/credit|balance|billing/i.test(msg)) return "закончился баланс ИИ";
+  if (/overloaded|529|503|unavailable/i.test(msg)) return "ИИ перегружен";
+  if (/JSON|неполный|не вернул/i.test(msg)) return "ИИ вернул неполный ответ";
+  if (/не задан|не подключ/i.test(msg)) return "ИИ не подключён";
+  return "ошибка сервиса ИИ";
+}
+
 // Есть ли доступ к «Помощнику ответов» — для меню, кабинета и страницы (state и срок — чтобы объяснить, почему нет).
 // Сотруднику с действующим премиумом заодно выдаём достижение «⭐ Премиум».
 export async function GET() {
@@ -85,6 +98,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, ...saved, ...privacy });
   } catch (e) {
     console.error("assistant failed:", e);
-    return NextResponse.json({ error: "ИИ не смог ответить — попробуйте ещё раз" }, { status: 502 });
+    return NextResponse.json({ error: `ИИ не смог ответить — попробуйте ещё раз (${aiErrorReason(e)})` }, { status: 502 });
   }
 }
