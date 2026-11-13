@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { aiProvider, isReplyTone, type AIImage } from "@/lib/ai";
+import { aiProvider, isReplyChannel, isReplyTone, type AIImage } from "@/lib/ai";
 import { assistantAccess, awardAchievement, guardAssistant, loadKnowledge, MAX_CLIENT_MESSAGE, recordAssistantUse } from "@/lib/assistant";
 import { toNewAlphabet } from "@/lib/typingWords";
 import { describeMasked, maskPII, type PiiKind } from "@/lib/pii";
@@ -73,9 +73,14 @@ export async function POST(req: NextRequest) {
     const rawTones: unknown[] = Array.isArray(body.tones) ? body.tones : body.tone ? [body.tone] : [];
     const tones = [...new Set(rawTones.filter(isReplyTone))].filter((t) => t !== "default");
     const tone = tones.join(",") || "default";
-    const reply = await aiProvider.generateReply(knowledge.text, message, { tones, image });
+    // Куда отвечаем: отзыв (публично) или личное сообщение; оценку 1–5 сотрудник может указать для отзыва.
+    const channel = isReplyChannel(body.channel) ? body.channel : undefined;
+    const r = Number(body.rating);
+    const rating = channel === "review" && Number.isInteger(r) && r >= 1 && r <= 5 ? r : undefined;
+    const reply = await aiProvider.generateReply(knowledge.text, message, { tones, image, channel, rating });
     const result = { ...reply, uzNew: toNewAlphabet(reply.uz) };
-    const input = image ? `📷 Скриншот переписки${message ? `\n${message}` : ""}` : message;
+    const where = channel === "review" ? `⭐ Отзыв${rating ? ` (${rating}★)` : ""}\n` : channel === "dm" ? "💬 Личное сообщение\n" : "";
+    const input = where + (image ? `📷 Скриншот переписки${message ? `\n${message}` : ""}` : message);
     const saved = await recordAssistantUse(user, access, { mode, input, tone, result });
     return NextResponse.json({ ...result, ...saved, ...privacy });
   } catch (e) {

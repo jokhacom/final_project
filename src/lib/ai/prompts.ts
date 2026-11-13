@@ -1,4 +1,4 @@
-import type { AIImage, AIProvider, CheckedReply, CoachPlan, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level, QuestionType, ReplyTone } from "./provider";
+import type { AIImage, AIProvider, CheckedReply, CoachPlan, ContentLanguage, ExtractedRule, GeneratedGameItem, GeneratedLanguageItem, GeneratedQuestion, GeneratedReply, Level, QuestionType, ReplyChannel, ReplyTone } from "./provider";
 
 // Общие промпты для всех провайдеров. Провайдер отвечает только за то,
 // как отправить текст в свою модель и получить текст обратно (complete),
@@ -210,6 +210,20 @@ const TONE_RULE: Record<ReplyTone, string> = {
   angry: "клиент расстроен или злится: сначала искренне извинись и покажи, что понимаешь его, затем спокойно и конкретно объясни, что будет сделано",
 };
 
+// Отзыв — публичный ответ, его видят все; личное сообщение — разговор один на один. Правила у них разные.
+const CHANNEL_RULE: Record<ReplyChannel, string> = {
+  review: `Это ОТЗЫВ клиента (App Store, Google Play, карты, соцсети). Ответ публичный — его прочитают все, кто открывает отзывы:
+- начни с благодарности за отзыв (или оценку); на положительный отзыв — коротко и тепло поблагодари, без инструкций и лишнего текста;
+- на отрицательный отзыв или жалобу — извинись за неудобство, не спорь и не оправдывайся, покажи, что проблему услышали; коротко скажи, что будет сделано или что делать клиенту;
+- не задавай уточняющих вопросов, как в чате, и не обсуждай публично детали счёта, операций и сумм клиента; если нужно разобраться в его ситуации — пригласи написать в чат поддержки или позвонить (каналы и контакты — только из файлов);
+- если в отзыве вопрос — дай короткий ответ по существу из файлов, а подробности — в чате поддержки;
+- длина — 2–4 предложения, без длинных пошаговых инструкций.`,
+  dm: `Это ЛИЧНОЕ СООБЩЕНИЕ клиента в чате (мессенджер, директ). Это разговор один на один:
+- отвечай по существу вопроса; если нужно — дай пошаговую инструкцию из файлов;
+- если для решения не хватает деталей — вежливо задай уточняющий вопрос (но не проси прислать в чат личные данные);
+- благодарить за «отзыв» не нужно — это не отзыв, а обращение.`,
+};
+
 // getContext — «Кто проходит обучение» (настройка администратора, см. lib/workContext.ts).
 export function createProvider(complete: Complete, getContext: () => Promise<string> = async () => ""): AIProvider {
   const ctx = async () => {
@@ -344,15 +358,25 @@ ${avoid.join("\n") || "—"}
       const tones = (opts?.tones ?? []).filter((t) => t !== "default");
       const toneText = tones.length ? tones.map((t) => TONE_RULE[t]).join("; И одновременно ") : TONE_RULE.default;
       const clientBlock = opts?.image
-        ? `Сообщение клиента — на скриншоте переписки (картинка приложена). Прочитай переписку и отвечай на ПОСЛЕДНИЕ сообщения клиента.${
+        ? `${
+            opts.channel === "review"
+              ? "Отзыв клиента — на скриншоте (картинка приложена). Прочитай отзыв и оценку и ответь на него."
+              : "Сообщение клиента — на скриншоте переписки (картинка приложена). Прочитай переписку и отвечай на ПОСЛЕДНИЕ сообщения клиента."
+          }${
             clientMessage ? `\nПояснение сотрудника:\n"""\n${clientMessage}\n"""` : ""
           }`
-        : `Сообщение клиента:\n"""\n${clientMessage}\n"""`;
+        : `${opts?.channel === "review" ? "Отзыв клиента" : "Сообщение клиента"}:\n"""\n${clientMessage}\n"""`;
+      const rating = opts?.channel === "review" && opts.rating ? `\nОценка в отзыве: ${opts.rating} из 5 ★.` : "";
+      const channelBlock = opts?.channel
+        ? CHANNEL_RULE[opts.channel]
+        : "Определи сам, отзыв это или личное сообщение, и отвечай по правилам ниже для этого случая.\n" + CHANNEL_RULE.review + "\n" + CHANNEL_RULE.dm;
       const prompt = `Ты — опытный сотрудник компании, который отвечает клиентам. Клиент оставил отзыв или написал в личные сообщения, нужно составить готовый ответ, который сотрудник отправит клиенту.
 ${await ctx()}
 ${knowledgeBlock(knowledge)}
 
-${clientBlock}
+${clientBlock}${rating}
+
+${channelBlock}
 
 Как составить ответ:
 ${REPLY_RULES}
