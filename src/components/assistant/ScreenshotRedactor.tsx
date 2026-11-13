@@ -58,8 +58,8 @@ export function ScreenshotRedactor({ src, onDone, onCancel }: { src: string; onD
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div className="alert alert-error" style={{ margin: 0 }}>
-        🔒 Закрасьте личные данные клиента: <strong>ФИО, телефон, дату рождения, паспорт / ID-карту, номер карты</strong>. Проведите мышкой или пальцем по
-        этим местам — они станут чёрными.
+        🔒 Если на скриншоте есть личные данные клиента — <strong>ФИО, телефон, дата рождения, паспорт / ID-карта, номер карты</strong> — закрасьте их:
+        проведите мышкой или пальцем по этим местам, они станут чёрными. Нет личных данных — просто отметьте галочку ниже.
       </div>
       <canvas
         ref={canvasRef}
@@ -90,7 +90,7 @@ export function ScreenshotRedactor({ src, onDone, onCancel }: { src: string; onD
       </div>
       <label className="row small" style={{ gap: 8, fontWeight: 800, cursor: "pointer" }}>
         <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-        Я закрасил(а) все личные данные клиента на скриншоте
+        {rects.length ? "Я закрасил(а) все личные данные клиента на скриншоте" : "На скриншоте нет личных данных клиента"}
       </label>
       <div className="row" style={{ gap: 8 }}>
         <button className="btn btn-primary btn-sm" disabled={!confirmed} onClick={() => onDone(canvasRef.current!.toDataURL("image/jpeg", 0.85))}>

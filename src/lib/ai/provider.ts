@@ -65,6 +65,10 @@ export type ReplyTone = "default" | "official" | "friendly" | "short" | "angry";
 export const REPLY_TONES: ReplyTone[] = ["default", "official", "friendly", "short", "angry"];
 export const isReplyTone = (v: unknown): v is ReplyTone => REPLY_TONES.includes(v as ReplyTone);
 
+// Куда отвечает сотрудник: публичный отзыв (App Store, Google Play, карты, соцсети) или личные сообщения.
+export type ReplyChannel = "review" | "dm";
+export const isReplyChannel = (v: unknown): v is ReplyChannel => v === "review" || v === "dm";
+
 // Картинка для ИИ (скриншот переписки): base64 без префикса data:.
 export interface AIImage {
   mimeType: string;
@@ -129,7 +133,12 @@ export interface AIProvider {
 
   // Готовый ответ на вопрос клиента строго по файлам «Помощника ответов» — на русском и узбекском.
   // tones — тон ответа (можно несколько сразу, пусто — как в шаблонах), image — скриншот переписки (тогда clientMessage может быть пустым).
-  generateReply(knowledge: string, clientMessage: string, opts?: { tones?: ReplyTone[]; image?: AIImage }): Promise<GeneratedReply>;
+  // channel — отзыв или личное сообщение, rating — оценка в отзыве (1–5), если сотрудник её указал.
+  generateReply(
+    knowledge: string,
+    clientMessage: string,
+    opts?: { tones?: ReplyTone[]; image?: AIImage; channel?: ReplyChannel; rating?: number },
+  ): Promise<GeneratedReply>;
 
   // «Проверь мой ответ»: черновик сотрудника по тем же файлам — ошибки и исправленный вариант.
   checkReply(knowledge: string, clientMessage: string, draft: string): Promise<CheckedReply>;
